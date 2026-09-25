@@ -1,0 +1,1920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC-09 · ABF Substrate Supply Risk Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,72,500;0,72,600;1,72,500;1,72,600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  :root{
+    --bg:#F3F5F7;
+    --panel:#FFFFFF;
+    --panel-alt:#F8F9FB;
+    --border:#D7DEE5;
+    --border-strong:#B9C4CE;
+    --ink:#16283A;
+    --ink-soft:#1F3A52;
+    --slate:#64798C;
+    --slate-soft:#8A98A6;
+    --accent:#C4432B;
+    --accent-soft:#F3DED8;
+    --accent-bg:#FBEEEA;
+    --confirm:#3E7C63;
+    --confirm-soft:#DCEBE4;
+    --circuit:#0E7C86;
+    --circuit-soft:#DCEEF0;
+    --circuit-bg:#E9F4F5;
+    --gold:#A8791A;
+    --gold-soft:#F3E7CB;
+    --gold-bg:#FAF1DE;
+    --violet:#6B5DA8;
+    --violet-soft:#E8E4F5;
+    --violet-bg:#F2EFFA;
+    --rose:#B54B6B;
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+  .serif{ font-family:'Fraunces', serif; font-optical-sizing:auto; }
+  .gradient-text{
+    background: linear-gradient(100deg, var(--ink-soft) 0%, var(--circuit) 45%, var(--violet) 85%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  *{ scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce){
+    *{ scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+  }
+  body{
+    background-color:var(--bg);
+    background-image:
+      linear-gradient(rgba(31,58,82,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(31,58,82,0.05) 1px, transparent 1px);
+    background-size: 32px 32px;
+    background-attachment: fixed;
+    color:var(--ink);
+  }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--slate);
+  }
+  .panel{ background:var(--panel); border:1px solid var(--border); }
+  .hairline{ border-color:var(--border); }
+  .focus-ring:focus-visible{ outline:2px solid var(--ink-soft); outline-offset:2px; border-radius:2px; }
+  button, [tabindex]{ }
+  .grid-texture{
+    background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  #flow-bg{
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    display: block;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  /* Aurora — slow-drifting gradient mesh, page-wide, behind the particle canvas */
+  #aurora{
+    position: fixed; inset: 0; z-index: -2;
+    overflow: hidden; pointer-events: none;
+  }
+  #aurora .blob{
+    position: absolute;
+    width: 60vw; height: 60vw;
+    max-width: 900px; max-height: 900px;
+    border-radius: 50%;
+    filter: blur(70px);
+    opacity: 0.32;
+    mix-blend-mode: multiply;
+    animation: aurora-drift 26s ease-in-out infinite;
+  }
+  #aurora .blob:nth-child(1){ background: var(--circuit); top: -14%; left: -10%; animation-delay: 0s; }
+  #aurora .blob:nth-child(2){ background: var(--violet); top: 10%; right: -16%; animation-duration: 32s; animation-delay: -8s; }
+  #aurora .blob:nth-child(3){ background: var(--gold); bottom: -20%; left: 18%; animation-duration: 22s; animation-delay: -4s; }
+  #aurora .blob:nth-child(4){ background: var(--rose); bottom: 5%; right: 12%; width: 42vw; height: 42vw; animation-duration: 28s; animation-delay: -14s; }
+  @keyframes aurora-drift{
+    0%, 100%{ transform: translate(0,0) scale(1); }
+    33%{ transform: translate(4%, 6%) scale(1.08); }
+    66%{ transform: translate(-5%, 3%) scale(0.95); }
+  }
+
+  /* Glass panels — high-opacity so data stays fully legible, translucent enough for aurora to read through */
+  .panel{
+    background: rgba(255,255,255,0.94);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(14px) saturate(1.1);
+    -webkit-backdrop-filter: blur(14px) saturate(1.1);
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  }
+  .panel:hover{
+    box-shadow: 0 12px 32px -12px rgba(22,40,58,0.18), 0 2px 8px rgba(22,40,58,0.06);
+    border-color: var(--border-strong);
+  }
+  @media (prefers-reduced-motion: reduce){ .panel{ transition:none; } .panel:hover{ transform:none; } }
+  @media (hover: hover){ .panel:hover{ transform: translateY(-2px); } }
+
+  .badge{ font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.04em; }
+  .scrollbar-thin::-webkit-scrollbar{ width:6px; height:6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb{ background:var(--border-strong); border-radius:3px; }
+  .tag-chip{ transition: background-color .15s ease, border-color .15s ease; }
+  @media (prefers-reduced-motion: reduce){ .tag-chip{ transition:none; } }
+
+  /* Nav tabs */
+  .nav-tab{
+    display:flex; align-items:center; gap:6px;
+    padding:6px 10px;
+    border:1px solid var(--border);
+    border-radius:2px;
+    color:var(--slate);
+    white-space:nowrap;
+    transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+  }
+  @media (prefers-reduced-motion: reduce){ .nav-tab{ transition:none; } }
+  .nav-tab:hover{ border-color:var(--circuit); color:var(--circuit); }
+  .nav-tab.active{
+    background:var(--circuit); border-color:var(--circuit); color:#FFFFFF;
+  }
+  .nav-tab.active svg{ color:#FFFFFF !important; }
+
+  /* Die-edge gradient strip */
+  .die-edge{
+    height:3px; width:100%;
+    background:linear-gradient(90deg, var(--ink-soft) 0%, var(--circuit) 50%, var(--ink-soft) 100%);
+  }
+
+  /* Circuit-trace load animation (single, one-time; header only) */
+  .circuit-trace path{
+    stroke-dasharray: 1400;
+    stroke-dashoffset: 1400;
+    animation: trace-draw 1.3s ease-out forwards;
+  }
+  .circuit-trace circle{
+    opacity: 0;
+    animation: via-fade .5s ease-out forwards;
+    animation-delay: 1.05s;
+  }
+  @keyframes trace-draw{ to { stroke-dashoffset: 0; } }
+  @keyframes via-fade{ to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce){
+    .circuit-trace path{ stroke-dashoffset: 0; animation: none; }
+    .circuit-trace circle{ opacity: 1; animation: none; }
+  }
+
+  /* Sensitivity sliders */
+  input[type="range"].tech-slider{
+    accent-color: var(--circuit);
+    height: 4px;
+  }
+
+  /* Search */
+  #search-results{
+    position:absolute; left:0; right:0; top:calc(100% + 6px);
+    max-height:420px; overflow-y:auto; z-index:30;
+    box-shadow: 0 8px 24px rgba(22,40,58,0.12);
+  }
+  .search-hit:hover, .search-hit:focus-visible{ background:var(--circuit-bg) !important; }
+  .row-flash{ background:var(--circuit-soft) !important; }
+
+  /* Loading screen — semiconductor-themed, one-time on page load */
+  #loader{
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 22px;
+    transition: opacity .45s ease, visibility .45s ease;
+  }
+  #loader.hide{ opacity: 0; visibility: hidden; pointer-events: none; }
+  .loader-caption{ font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--slate); }
+  .loader-bar{ width: 180px; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .loader-bar-fill{ height: 100%; width: 34%; background: linear-gradient(90deg, var(--circuit), var(--violet)); border-radius: 2px; animation: loader-sweep 1s ease-in-out infinite; }
+  @keyframes loader-sweep{
+    0%{ transform: translateX(-110%); }
+    100%{ transform: translateX(340%); }
+  }
+  .dancer-label{ font-size: 9px; letter-spacing: .08em; fill: var(--slate); font-family: 'IBM Plex Mono', monospace; }
+  .dancer g[data-limb]{ transform-box: view-box; }
+  .dancer-1 [data-limb="arm-l"]{ animation: arm-a .58s ease-in-out infinite; }
+  .dancer-1 [data-limb="arm-r"]{ animation: arm-b .58s ease-in-out infinite; }
+  .dancer-1 [data-limb="leg-l"]{ animation: leg-a .58s ease-in-out infinite; }
+  .dancer-1 [data-limb="leg-r"]{ animation: leg-b .58s ease-in-out infinite; }
+  .dancer-2 [data-limb]{ animation-delay: .14s; }
+  .dancer-3 [data-limb]{ animation-delay: .28s; }
+  .dancer-2 [data-limb="arm-l"]{ animation: arm-a .58s ease-in-out infinite; }
+  .dancer-2 [data-limb="arm-r"]{ animation: arm-b .58s ease-in-out infinite; }
+  .dancer-2 [data-limb="leg-l"]{ animation: leg-a .58s ease-in-out infinite; }
+  .dancer-2 [data-limb="leg-r"]{ animation: leg-b .58s ease-in-out infinite; }
+  .dancer-3 [data-limb="arm-l"]{ animation: arm-a .58s ease-in-out infinite; }
+  .dancer-3 [data-limb="arm-r"]{ animation: arm-b .58s ease-in-out infinite; }
+  .dancer-3 [data-limb="leg-l"]{ animation: leg-a .58s ease-in-out infinite; }
+  .dancer-3 [data-limb="leg-r"]{ animation: leg-b .58s ease-in-out infinite; }
+  @keyframes arm-a{ 0%,100%{ transform: rotate(-28deg); } 50%{ transform: rotate(22deg); } }
+  @keyframes arm-b{ 0%,100%{ transform: rotate(28deg); } 50%{ transform: rotate(-22deg); } }
+  @keyframes leg-a{ 0%,100%{ transform: rotate(16deg); } 50%{ transform: rotate(-16deg); } }
+  @keyframes leg-b{ 0%,100%{ transform: rotate(-16deg); } 50%{ transform: rotate(16deg); } }
+  @media (prefers-reduced-motion: reduce){
+    .dancer [data-limb]{ animation: none !important; }
+    .loader-bar-fill{ animation: none !important; width: 55%; }
+  }
+</style>
+</head>
+<body class="antialiased">
+
+<!-- ============ LOADING SCREEN ============ -->
+<div id="loader" role="status" aria-live="polite">
+  <svg viewBox="0 0 320 130" style="width:280px; max-width:80vw;" aria-hidden="true">
+    <!-- Nvidia -->
+    <g class="dancer dancer-1" transform="translate(60,55)">
+      <g data-limb="arm-l"><line x1="-18" y1="-6" x2="-30" y2="10" stroke="var(--confirm)" stroke-width="4" stroke-linecap="round"/></g>
+      <g data-limb="arm-r"><line x1="18" y1="-6" x2="30" y2="10" stroke="var(--confirm)" stroke-width="4" stroke-linecap="round"/></g>
+      <g data-limb="leg-l"><line x1="-8" y1="24" x2="-16" y2="44" stroke="var(--confirm)" stroke-width="4" stroke-linecap="round"/></g>
+      <g data-limb="leg-r"><line x1="8" y1="24" x2="16" y2="44" stroke="var(--confirm)" stroke-width="4" stroke-linecap="round"/></g>
+      <rect x="-18" y="-16" width="36" height="40" rx="7" fill="var(--panel)" stroke="var(--confirm)" stroke-width="2.5"/>
+      <rect x="-24" y="-9" width="7" height="4" fill="var(--confirm)"/><rect x="-24" y="4" width="7" height="4" fill="var(--confirm)"/>
+      <rect x="17" y="-9" width="7" height="4" fill="var(--confirm)"/><rect x="17" y="4" width="7" height="4" fill="var(--confirm)"/>
+      <circle cx="-7" cy="-2" r="2" fill="var(--ink)"/><circle cx="7" cy="-2" r="2" fill="var(--ink)"/>
+      <path d="M-7,7 Q0,12 7,7" stroke="var(--ink)" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <text x="0" y="66" text-anchor="middle" class="dancer-label">NVIDIA</text>
+    </g>
+    <!-- AMD -->
+    <g class="dancer dancer-2" transform="translate(160,55)">
+      <g data-limb="arm-l"><line x1="-18" y1="-6" x2="-30" y2="10" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/></g>
+      <g data-limb="arm-r"><line x1="18" y1="-6" x2="30" y2="10" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/></g>
+      <g data-limb="leg-l"><line x1="-8" y1="24" x2="-16" y2="44" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/></g>
+      <g data-limb="leg-r"><line x1="8" y1="24" x2="16" y2="44" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/></g>
+      <rect x="-18" y="-16" width="36" height="40" rx="7" fill="var(--panel)" stroke="var(--accent)" stroke-width="2.5"/>
+      <rect x="-24" y="-9" width="7" height="4" fill="var(--accent)"/><rect x="-24" y="4" width="7" height="4" fill="var(--accent)"/>
+      <rect x="17" y="-9" width="7" height="4" fill="var(--accent)"/><rect x="17" y="4" width="7" height="4" fill="var(--accent)"/>
+      <circle cx="-7" cy="-2" r="2" fill="var(--ink)"/><circle cx="7" cy="-2" r="2" fill="var(--ink)"/>
+      <path d="M-7,7 Q0,12 7,7" stroke="var(--ink)" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <text x="0" y="66" text-anchor="middle" class="dancer-label">AMD</text>
+    </g>
+    <!-- Intel -->
+    <g class="dancer dancer-3" transform="translate(260,55)">
+      <g data-limb="arm-l"><line x1="-18" y1="-6" x2="-30" y2="10" stroke="var(--circuit)" stroke-width="4" stroke-linecap="round"/></g>
+      <g data-limb="arm-r"><line x1="18" y1="-6" x2="30" y2="10" stroke="var(--circuit)" stroke-width="4" stroke-linecap="round"/></g>
+      <g data-limb="leg-l"><line x1="-8" y1="24" x2="-16" y2="44" stroke="var(--circuit)" stroke-width="4" stroke-linecap="round"/></g>
+      <g data-limb="leg-r"><line x1="8" y1="24" x2="16" y2="44" stroke="var(--circuit)" stroke-width="4" stroke-linecap="round"/></g>
+      <rect x="-18" y="-16" width="36" height="40" rx="7" fill="var(--panel)" stroke="var(--circuit)" stroke-width="2.5"/>
+      <rect x="-24" y="-9" width="7" height="4" fill="var(--circuit)"/><rect x="-24" y="4" width="7" height="4" fill="var(--circuit)"/>
+      <rect x="17" y="-9" width="7" height="4" fill="var(--circuit)"/><rect x="17" y="4" width="7" height="4" fill="var(--circuit)"/>
+      <circle cx="-7" cy="-2" r="2" fill="var(--ink)"/><circle cx="7" cy="-2" r="2" fill="var(--ink)"/>
+      <path d="M-7,7 Q0,12 7,7" stroke="var(--ink)" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <text x="0" y="66" text-anchor="middle" class="dancer-label">INTEL</text>
+    </g>
+  </svg>
+  <div class="loader-caption mono">Waiting on the substrate makers to catch up&hellip;</div>
+  <div class="loader-bar"><div class="loader-bar-fill"></div></div>
+</div>
+
+<div id="aurora" aria-hidden="true">
+  <div class="blob"></div>
+  <div class="blob"></div>
+  <div class="blob"></div>
+  <div class="blob"></div>
+</div>
+
+<canvas id="flow-bg" aria-hidden="true"></canvas>
+
+<div class="die-edge" aria-hidden="true"></div>
+
+<!-- ============ STICKY HEADER ============ -->
+<header class="sticky top-0 z-40 panel border-b hairline backdrop-blur-sm bg-white/95">
+  <div class="max-w-[1280px] mx-auto px-5 md:px-8 py-3 flex flex-wrap items-center gap-3 justify-between">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="flex items-center justify-center w-9 h-9 rounded-sm border hairline shrink-0" style="background:var(--panel-alt)">
+        <i data-lucide="cpu" class="w-4.5 h-4.5" style="color:var(--ink-soft); width:18px; height:18px;"></i>
+      </div>
+      <div class="min-w-0">
+        <div class="eyebrow leading-none">PIR SC&#8209;09</div>
+        <h1 class="text-[15px] md:text-base font-semibold leading-tight truncate" style="color:var(--ink-soft)">ABF Substrate Supply — Taiwan Capacity Risk</h1>
+      </div>
+    </div>
+
+    <nav id="section-nav" class="flex w-full lg:w-auto items-center gap-1.5 mono text-[11px] uppercase tracking-wide overflow-x-auto scrollbar-thin" aria-label="Section tabs" role="tablist">
+      <button type="button" data-tab="t1" class="nav-tab focus-ring" role="tab"><i data-lucide="list-checks" style="width:12px;height:12px"></i><span>A · EEI</span></button>
+      <button type="button" data-tab="t2" class="nav-tab focus-ring" role="tab"><i data-lucide="database" style="width:12px;height:12px"></i><span>B/C · Evidence</span></button>
+      <button type="button" data-tab="t3" class="nav-tab focus-ring" role="tab"><i data-lucide="flame" style="width:12px;height:12px"></i><span>D · Risk</span></button>
+      <button type="button" data-tab="t4" class="nav-tab focus-ring" role="tab"><i data-lucide="shuffle" style="width:12px;height:12px"></i><span>E · Scen</span></button>
+      <button type="button" data-tab="t5" class="nav-tab focus-ring" role="tab"><i data-lucide="layers" style="width:12px;height:12px"></i><span>F · Tech &amp; Flow</span></button>
+      <button type="button" data-tab="t6" class="nav-tab focus-ring" role="tab"><i data-lucide="bot" style="width:12px;height:12px"></i><span>G · AI Log</span></button>
+      <button type="button" data-tab="t7" class="nav-tab focus-ring" role="tab"><i data-lucide="target" style="width:12px;height:12px"></i><span>H · Fcst</span></button>
+    </nav>
+
+    <button type="button" data-tab="t7" class="focus-ring flex items-center gap-2 rounded-sm border px-3 py-1.5 shrink-0" style="border-color:var(--border-strong); background:var(--panel-alt)">
+      <span class="badge px-1.5 py-0.5 rounded-sm text-white" style="background:var(--ink-soft)">YES</span>
+      <span class="mono text-[11px]" style="color:var(--slate)">Moderate ·</span>
+      <span class="mono text-[11px] font-semibold" id="header-ratio" style="color:var(--ink-soft)">57%</span>
+      <span class="mono text-[10px]" style="color:var(--slate-soft)">verified</span>
+    </button>
+  </div>
+  <svg class="circuit-trace" viewBox="0 0 1280 28" preserveAspectRatio="none" style="width:100%; height:8px; display:block;" aria-hidden="true">
+    <path d="M0,14 L120,14 L150,4 L280,4 L310,14 L520,14 L550,24 L760,24 L790,14 L1000,14 L1030,4 L1280,4" fill="none" stroke="var(--circuit)" stroke-width="1.5"/>
+    <circle cx="150" cy="4" r="2.5" fill="var(--circuit)"/>
+    <circle cx="310" cy="14" r="2.5" fill="var(--circuit)"/>
+    <circle cx="550" cy="24" r="2.5" fill="var(--circuit)"/>
+    <circle cx="790" cy="14" r="2.5" fill="var(--circuit)"/>
+    <circle cx="1030" cy="4" r="2.5" fill="var(--circuit)"/>
+  </svg>
+</header>
+
+<!-- ============ HERO ============ -->
+<section class="relative overflow-hidden border-b hairline">
+  <div class="max-w-[1280px] mx-auto px-5 md:px-8 py-14 md:py-20 relative">
+    <div class="flex flex-wrap items-center gap-2.5 mb-7">
+      <span class="mono text-[11px] px-2.5 py-1 rounded-sm border tracking-wide" style="color:var(--circuit); border-color:var(--circuit); background:rgba(233,244,245,0.75)">GLOBAL SUPPLY CHAIN INTELLIGENCE</span>
+      <span class="mono text-[11px] px-2.5 py-1 rounded-sm border tracking-wide" style="color:var(--slate); border-color:var(--border-strong); background:rgba(255,255,255,0.6)">PIR SC&#8209;09 &middot; Resolves 06 Oct 2026</span>
+    </div>
+    <p class="serif italic text-[26px] md:text-[38px] lg:text-[44px] leading-[1.18] max-w-4xl" style="color:var(--ink)">
+      &ldquo;Will Taiwan's three major ABF substrate makers still be running at or near full capacity as of 6 October 2026 &mdash; utilisation at or above 90%, combined September revenue at or above August's <span class="gradient-text serif" style="font-style:normal;">NT&#36;27.9 billion</span>?&rdquo;
+    </p>
+    <div class="mt-9 flex flex-wrap gap-4">
+      <div class="rounded-sm border px-5 py-4" style="background:rgba(255,255,255,0.72); border-color:var(--border-strong); backdrop-filter:blur(10px)">
+        <div class="eyebrow mb-1">Forecast</div>
+        <div class="serif text-3xl font-semibold" style="color:var(--ink-soft)">YES</div>
+      </div>
+      <div class="rounded-sm border px-5 py-4" style="background:rgba(255,255,255,0.72); border-color:var(--border-strong); backdrop-filter:blur(10px)">
+        <div class="eyebrow mb-1">Confidence</div>
+        <div class="serif text-3xl font-semibold" style="color:var(--gold)">Moderate</div>
+      </div>
+      <div class="rounded-sm border px-5 py-4" style="background:rgba(255,255,255,0.72); border-color:var(--border-strong); backdrop-filter:blur(10px)">
+        <div class="eyebrow mb-1">Verified sources</div>
+        <div class="serif text-3xl font-semibold" id="hero-ratio" style="color:var(--confirm)">&mdash;</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<main class="max-w-[1280px] mx-auto px-5 md:px-8 py-8 space-y-16">
+
+  <!-- ============ GLOBAL SEARCH (client-side, no API, filters embedded dataset only) ============ -->
+  <div class="relative">
+    <div class="relative">
+      <i data-lucide="search" style="position:absolute; left:14px; top:50%; transform:translateY(-50%); width:19px; height:19px; color:var(--circuit); stroke-width:2.5; pointer-events:none; z-index:2;"></i>
+      <input id="global-search" type="text" autocomplete="off"
+        placeholder="Search EEIs, evidence, risks, sources — e.g. &quot;Kuangfu&quot;, &quot;utilisation&quot;, &quot;Ajinomoto&quot;"
+        class="focus-ring w-full panel rounded-sm text-sm py-3 pl-12 pr-4" style="border:1px solid var(--border-strong); color:var(--ink)">
+    </div>
+    <div id="search-results" class="hidden panel rounded-sm scrollbar-thin"></div>
+  </div>
+
+  <div id="tab-panel-top"></div>
+
+  <!-- ============ SECTION A: PIR + EEI/EVIDENCE/SOURCE DRILLDOWN ============ -->
+  <section id="sec-a" aria-labelledby="sec-a-heading">
+    <div class="flex items-baseline gap-3 mb-1">
+      <span class="eyebrow">Section A</span>
+      <span class="h-px flex-1" style="background:linear-gradient(90deg, var(--circuit) 0%, var(--border) 35%, var(--border) 100%)"></span>
+    </div>
+    <h2 id="sec-a-heading" class="text-xl md:text-2xl font-semibold mb-5" style="color:var(--ink-soft)">PIR, Essential Elements &amp; the Audit Trail</h2>
+
+    <!-- PIR statement -->
+    <div class="panel rounded-sm p-5 md:p-6 mb-6">
+      <div class="eyebrow mb-2">Priority Intelligence Requirement</div>
+      <p class="text-[15px] md:text-base leading-relaxed" style="color:var(--ink)">Will Taiwan's three major ABF substrate makers still be running at or near full capacity as of 6 October 2026, with ABF utilisation at or above 90% and combined September revenue at or above August's NT$27.9 billion, as per TWSE filings and company disclosures?</p>
+
+      <div class="grid md:grid-cols-2 gap-5 mt-5 pt-5 border-t hairline">
+        <div>
+          <div class="eyebrow mb-1.5">Resolution criteria</div>
+          <p class="text-sm leading-relaxed" style="color:var(--slate)">YES if both hold: Unimicron's ABF utilisation &ge;90% AND combined September revenue (Unimicron + Nan Ya PCB + Kinsus) &ge; NT$27.9bn. If no Q3 utilisation update is published by 6 Oct, that half is marked <span class="mono text-[11px] px-1 py-0.5 rounded-sm" style="background:var(--gold-bg); color:var(--gold)">UNCONFIRMED-PERSISTING</span> (last known: above 90%, stated 29 Jul 2026) rather than resolved YES, pending Unimicron's 27 Oct earnings call. NO if either condition clearly fails. UNCERTAIN if too little has published to judge either side.</p>
+        </div>
+        <div>
+          <div class="eyebrow mb-1.5">Fallback rule</div>
+          <p class="text-sm leading-relaxed" style="color:var(--slate)">Revenue side: if Unimicron's September filing hasn't published by 6 Oct, the revenue condition is checked on Nan Ya PCB + Kinsus only, against their combined August figure of NT$10.16bn. Utilisation side: no separate fallback source needed — it's built into the resolution criteria itself. If both sides are unresolved, the PIR resolves UNCERTAIN outright.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Drilldown -->
+    <div class="panel rounded-sm overflow-hidden">
+      <div class="border-b hairline" style="background:var(--panel-alt)">
+        <div class="px-5 py-3 flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center gap-2">
+            <i data-lucide="git-branch" style="width:15px;height:15px;color:var(--ink-soft)"></i>
+            <span class="text-sm font-medium" style="color:var(--ink-soft)">EEI &rarr; Evidence &rarr; Source drill-down</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <button id="fallback-toggle" class="focus-ring flex items-center gap-1.5 mono text-[11px] px-2 py-1 rounded-sm border hairline" style="color:var(--slate); background:var(--panel)">
+              <i data-lucide="corner-down-right" style="width:11px;height:11px"></i>
+              <span>Resolution &amp; fallback rule</span>
+              <i data-lucide="chevron-down" id="fallback-chevron" style="width:11px;height:11px"></i>
+            </button>
+            <span class="mono text-[11px] hidden sm:inline" style="color:var(--slate-soft)">click an EEI, then an evidence item</span>
+          </div>
+        </div>
+        <div id="fallback-reference" class="hidden px-5 pb-4 pt-1 border-t hairline text-[12px] leading-relaxed" style="color:var(--slate)">
+          <span class="eyebrow">Fallback rule</span>
+          <p class="mt-1">Revenue side: if Unimicron's September filing hasn't published by 6 Oct, the revenue condition is checked on Nan Ya PCB + Kinsus only, against their combined August figure of NT$10.16bn. Utilisation side: no separate fallback source needed — it's built into the resolution criteria itself (UNCONFIRMED-PERSISTING). If both sides are unresolved, the PIR resolves UNCERTAIN outright.</p>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-[340px_1fr] min-h-[420px]">
+        <!-- EEI list -->
+        <div id="eei-list" class="border-b md:border-b-0 md:border-r hairline overflow-y-auto scrollbar-thin max-h-[560px]" role="listbox" aria-label="Essential Elements of Information"></div>
+        <!-- Evidence + source panel -->
+        <div id="evidence-panel" class="p-5 md:p-6 overflow-y-auto scrollbar-thin max-h-[560px]"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SECTION B: SOURCE REGISTRY (standalone) ============ -->
+  <section id="sec-b" aria-labelledby="sec-b-heading">
+    <div class="flex items-baseline gap-3 mb-1">
+      <span class="eyebrow">Section B</span>
+      <span class="h-px flex-1" style="background:linear-gradient(90deg, var(--circuit) 0%, var(--border) 35%, var(--border) 100%)"></span>
+    </div>
+    <h2 id="sec-b-heading" class="text-xl md:text-2xl font-semibold mb-5" style="color:var(--ink-soft)">Source Registry</h2>
+    <div class="panel rounded-sm p-5 md:p-6">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div class="eyebrow">Full registry — all 15 sources</div>
+        <div class="mono text-[11px]" style="color:var(--slate-soft)">15 sources · 5 families · min. 6 required, 3 families — met</div>
+      </div>
+      <div id="source-registry" class="overflow-x-auto">
+        <table class="w-full text-sm min-w-[820px]">
+          <thead>
+            <tr class="text-left border-b hairline eyebrow">
+              <th class="py-2 pr-3">Ref</th>
+              <th class="py-2 pr-3">Source</th>
+              <th class="py-2 pr-3">Family</th>
+              <th class="py-2 pr-3">Publishes by</th>
+              <th class="py-2 pr-3">10-min test</th>
+              <th class="py-2">What it answers</th>
+            </tr>
+          </thead>
+          <tbody id="source-registry-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SECTION C: EVIDENCE GRADING (standalone) ============ -->
+  <section id="sec-c" aria-labelledby="sec-c-heading">
+    <div class="flex items-baseline gap-3 mb-1">
+      <span class="eyebrow">Section C</span>
+      <span class="h-px flex-1" style="background:linear-gradient(90deg, var(--circuit) 0%, var(--border) 35%, var(--border) 100%)"></span>
+    </div>
+    <h2 id="sec-c-heading" class="text-xl md:text-2xl font-semibold mb-5" style="color:var(--ink-soft)">Evidence Grading</h2>
+    <div class="panel rounded-sm p-5 md:p-6 mb-8">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div class="eyebrow">Full log — all 14 items, incl. 1 discarded</div>
+        <div class="mono text-[11px]" style="color:var(--slate-soft)">Admiralty-style A&ndash;F reliability grading</div>
+      </div>
+      <div id="evidence-registry" class="overflow-x-auto">
+        <table class="w-full text-sm min-w-[920px]">
+          <thead>
+            <tr class="text-left border-b hairline eyebrow">
+              <th class="py-2 pr-3">Ref</th>
+              <th class="py-2 pr-3">Date</th>
+              <th class="py-2 pr-3">What was found</th>
+              <th class="py-2 pr-3">Source</th>
+              <th class="py-2 pr-3">Grade</th>
+              <th class="py-2 pr-3">2nd source</th>
+              <th class="py-2">Verdict</th>
+            </tr>
+          </thead>
+          <tbody id="evidence-registry-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Evidence visualized -->
+    <div class="mb-3 flex items-center gap-2">
+      <i data-lucide="bar-chart-3" style="width:14px;height:14px;color:var(--slate)"></i>
+      <span class="eyebrow">Evidence visualized</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-5 mb-5">
+      <div class="panel rounded-sm p-4 md:p-6">
+        <div class="text-sm font-medium mb-3" style="color:var(--ink-soft)">Revenue trend — July vs August 2026</div>
+        <div class="relative" style="height:260px;"><canvas id="revenue-chart" role="img" aria-label="Line chart of July versus August 2026 revenue for Unimicron, Kinsus, and Nan Ya PCB"></canvas></div>
+        <p class="mono text-[10px] mt-3 leading-relaxed" style="color:var(--slate-soft)">Unimicron's two points are directly disclosed (E1, E2). Kinsus's and Nan Ya's July points are derived from their disclosed August figure and disclosed MoM % change (E3, E4) — not separately disclosed, marked with a hollow point.</p>
+      </div>
+      <div class="panel rounded-sm p-4 md:p-6">
+        <div class="text-sm font-medium mb-3" style="color:var(--ink-soft)">ABF utilisation comparison</div>
+        <div class="relative" style="height:260px;"><canvas id="utilisation-chart" role="img" aria-label="Bar chart comparing ABF utilisation ranges for Unimicron, Kinsus, and Nan Ya PCB"></canvas></div>
+        <p class="mono text-[10px] mt-3 leading-relaxed" style="color:var(--slate-soft)">Unimicron: floor only, no disclosed ceiling (E10). Kinsus: point estimate (Section B, S13). Nan Ya: disclosed range, not a point figure (Section B, S12). Ranges reflect what was actually reported, per R2.</p>
+      </div>
+    </div>
+    <div class="panel rounded-sm p-4 md:p-6">
+      <div class="text-sm font-medium mb-3" style="color:var(--ink-soft)">Ajinomoto price-hike timeline</div>
+      <div id="pricehike-timeline" class="w-full overflow-x-auto"></div>
+      <p class="mono text-[10px] mt-3" style="color:var(--slate-soft)">Only dated, sourced events shown (E7, E5). No earlier lead-up event is documented in the evidence base.</p>
+    </div>
+  </section>
+
+  <!-- ============ SECTION D: RISK HEATMAP ============ -->
+  <section id="sec-d" aria-labelledby="sec-d-heading">
+    <div class="flex items-baseline gap-3 mb-1">
+      <span class="eyebrow">Section D</span>
+      <span class="h-px flex-1" style="background:linear-gradient(90deg, var(--circuit) 0%, var(--border) 35%, var(--border) 100%)"></span>
+    </div>
+    <h2 id="sec-d-heading" class="text-xl md:text-2xl font-semibold mb-5" style="color:var(--ink-soft)">Risk Heatmap</h2>
+
+    <div class="grid lg:grid-cols-[1fr_420px] gap-6">
+      <div class="panel rounded-sm p-4 md:p-6">
+        <div class="relative" style="height:420px;">
+          <canvas id="risk-chart" role="img" aria-label="Scatter plot of 8 risks by likelihood and impact"></canvas>
+        </div>
+        <p class="mono text-[11px] mt-3" style="color:var(--slate-soft)">Likelihood (x) &times; Impact (y). Point fill deepens with combined severity; red marks High/High. Click a point for detail.</p>
+      </div>
+      <div id="risk-detail" class="panel rounded-sm p-5 md:p-6"></div>
+    </div>
+  </section>
+
+  <!-- ============ SECTION E: SCENARIOS ============ -->
+  <section id="sec-e" aria-labelledby="sec-e-heading">
+    <div class="flex items-baseline gap-3 mb-1">
+      <span class="eyebrow">Section E</span>
+      <span class="h-px flex-1" style="background:linear-gradient(90deg, var(--circuit) 0%, var(--border) 35%, var(--border) 100%)"></span>
+    </div>
+    <h2 id="sec-e-heading" class="text-xl md:text-2xl font-semibold mb-5" style="color:var(--ink-soft)">Scenario Planning</h2>
+    <div id="scenario-cards" class="grid md:grid-cols-3 gap-5"></div>
+  </section>
+
+  <!-- ============ SECTION F: TECH EXPOSURE + CRSM ============ -->
+  <section id="sec-f" aria-labelledby="sec-f-heading">
+    <div class="flex items-baseline gap-3 mb-1">
+      <span class="eyebrow">Section F</span>
+      <span class="h-px flex-1" style="background:linear-gradient(90deg, var(--circuit) 0%, var(--border) 35%, var(--border) 100%)"></span>
+    </div>
+    <h2 id="sec-f-heading" class="text-xl md:text-2xl font-semibold mb-5" style="color:var(--ink-soft)">Technology Exposure Map</h2>
+
+    <div class="panel rounded-sm overflow-x-auto mb-6">
+      <table class="w-full text-sm min-w-[640px]">
+        <thead>
+          <tr class="text-left border-b hairline eyebrow" style="background:var(--panel-alt)">
+            <th class="py-2.5 px-4">Technology</th>
+            <th class="py-2.5 px-4 w-24">Exposure</th>
+            <th class="py-2.5 px-4">Why it matters</th>
+            <th class="py-2.5 px-4">Mitigation opportunity</th>
+          </tr>
+        </thead>
+        <tbody id="tech-table-body"></tbody>
+      </table>
+    </div>
+
+    <div class="mb-2 flex items-center gap-2">
+      <i data-lucide="layers" style="width:14px;height:14px;color:var(--slate)"></i>
+      <span class="eyebrow">CRSM layer (enhancement) — secondary</span>
+    </div>
+    <div class="panel rounded-sm overflow-x-auto">
+      <table class="w-full text-sm min-w-[760px]">
+        <thead>
+          <tr class="text-left border-b hairline eyebrow" style="background:var(--panel-alt)">
+            <th class="py-2.5 px-4">Exposure point</th>
+            <th class="py-2.5 px-4">Concentrate</th>
+            <th class="py-2.5 px-4">Regime</th>
+            <th class="py-2.5 px-4">Substitution</th>
+            <th class="py-2.5 px-4">Mitigate</th>
+          </tr>
+        </thead>
+        <tbody id="crsm-table-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ SUPPLY CHAIN FLOW ============ -->
+  <section id="sec-flow" aria-labelledby="sec-flow-heading">
+    <div class="flex items-baseline gap-3 mb-1">
+      <span class="eyebrow">Supply Chain</span>
+      <span class="h-px flex-1" style="background:linear-gradient(90deg, var(--circuit) 0%, var(--border) 35%, var(--border) 100%)"></span>
+    </div>
+    <h2 id="sec-flow-heading" class="text-xl md:text-2xl font-semibold mb-5" style="color:var(--ink-soft)">Relationship Flow — Not a Route Map</h2>
+    <div class="panel rounded-sm p-4 md:p-6">
+      <div id="flow-diagram" class="w-full overflow-x-auto"></div>
+      <p class="mono text-[11px] mt-3" style="color:var(--slate-soft)">Schematic of dependency relationships, not geography. Dashed line marks the disputed, unconfirmed relationship (E5/E6).</p>
+    </div>
+  </section>
+
+  <!-- ============ SECTION G: AI DIVERGENCE LOG ============ -->
+  <section id="sec-g" aria-labelledby="sec-g-heading">
+    <div class="flex items-baseline gap-3 mb-1">
+      <span class="eyebrow">Section G</span>
+      <span class="h-px flex-1" style="background:linear-gradient(90deg, var(--circuit) 0%, var(--border) 35%, var(--border) 100%)"></span>
+    </div>
+    <h2 id="sec-g-heading" class="text-xl md:text-2xl font-semibold mb-5" style="color:var(--ink-soft)">AI Divergence Log</h2>
+    <p class="text-sm mb-4" style="color:var(--slate)">Where the AI research passes were checked against primary sources — and what happened.</p>
+    <div id="divergence-list" class="space-y-2"></div>
+  </section>
+
+  <!-- ============ SECTION H: FORECAST ============ -->
+  <section id="sec-h" aria-labelledby="sec-h-heading">
+    <div class="flex items-baseline gap-3 mb-1">
+      <span class="eyebrow">Section H</span>
+      <span class="h-px flex-1" style="background:linear-gradient(90deg, var(--circuit) 0%, var(--border) 35%, var(--border) 100%)"></span>
+    </div>
+    <h2 id="sec-h-heading" class="text-xl md:text-2xl font-semibold mb-5" style="color:var(--ink-soft)">Forecast</h2>
+
+    <div class="panel rounded-sm p-5 md:p-8 grid md:grid-cols-[220px_1fr] gap-6 md:gap-10">
+      <div class="flex flex-col items-start gap-4">
+        <div>
+          <div class="eyebrow mb-1.5">By 6 Oct 2026, PIR resolves</div>
+          <div class="mono text-3xl font-semibold" style="color:var(--ink-soft)">YES</div>
+        </div>
+        <div>
+          <div class="eyebrow mb-1.5">Confidence</div>
+          <div class="mono text-lg font-medium" style="color:var(--ink-soft)">Moderate</div>
+        </div>
+        <div class="w-full pt-3 border-t hairline">
+          <div class="eyebrow mb-2">Verified-source ratio</div>
+          <div class="flex items-end gap-2 mb-2">
+            <span class="mono text-2xl font-semibold" id="ratio-big" style="color:var(--confirm)">57%</span>
+            <span class="mono text-[11px] pb-1" style="color:var(--slate-soft)" id="ratio-frac">8 / 14 verified</span>
+          </div>
+          <div class="h-2 rounded-sm overflow-hidden hairline border" style="background:var(--panel-alt)">
+            <div id="ratio-bar" class="h-full" style="background:var(--confirm); width:0%"></div>
+          </div>
+          <p class="mono text-[10px] mt-1.5" style="color:var(--slate-soft)">computed live from Section C evidence, incl. 1 discarded item</p>
+        </div>
+      </div>
+
+      <div class="space-y-5">
+        <div>
+          <div class="eyebrow mb-1.5">Reasoning</div>
+          <p class="text-sm leading-relaxed" style="color:var(--ink)">Moderate — not High: the qualitative evidence is strongly convergent (14 items, 3 research passes), but both PIR thresholds depend on data that may not exist by 6 Oct (Q3 utilisation isn't due until 27 Oct; no September revenue has been filed by anyone yet). The gap is between what the evidence suggests and what can be proven on the deadline.</p>
+        </div>
+        <div>
+          <div class="eyebrow mb-1.5">What would change the call</div>
+          <p class="text-sm leading-relaxed" style="color:var(--slate)">A confirmed report that Kuangfu Plant 2 Phase 3 came online on schedule, or any maker publicly citing eased lead times or falling utilisation — either would be the first real sign the ceiling is lifting rather than holding.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sensitivity sliders -->
+    <div class="mt-8">
+      <div class="flex items-center gap-2 mb-3">
+        <i data-lucide="sliders-horizontal" style="width:14px;height:14px;color:var(--slate)"></i>
+        <span class="eyebrow">Sensitivity — assumed September growth</span>
+      </div>
+      <div class="panel rounded-sm p-5 md:p-6">
+        <div id="sensitivity-sliders" class="space-y-6"></div>
+        <div class="mt-6 pt-5 border-t hairline flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <div class="eyebrow mb-1">Combined September estimate</div>
+            <div class="flex items-baseline gap-2">
+              <span class="mono text-2xl font-semibold" id="sens-total" style="color:var(--ink-soft)">—</span>
+              <span class="mono text-[11px]" style="color:var(--slate-soft)">NT$bn · vs 27.9 threshold</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="sens-verdict" class="mono text-[12px] px-3 py-1.5 rounded-sm border"></span>
+            <button id="sens-reset" class="focus-ring mono text-[11px] px-2.5 py-1.5 rounded-sm border hairline" style="color:var(--slate); background:var(--panel-alt)">Reset to actuals</button>
+          </div>
+        </div>
+        <p class="mono text-[10px] mt-4 leading-relaxed" style="color:var(--slate-soft)">Built from real August 2026 figures. The growth rates are assumptions you set, not a forecast or live data.</p>
+      </div>
+    </div>
+
+    <!-- ACH matrix -->
+    <div class="mt-8">
+      <div class="flex items-center gap-2 mb-3">
+        <i data-lucide="grid-3x3" style="width:14px;height:14px;color:var(--slate)"></i>
+        <span class="eyebrow">Analysis of competing hypotheses — evidence vs. scenario</span>
+      </div>
+      <div class="panel rounded-sm p-5 md:p-6">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm min-w-[640px]">
+            <thead>
+              <tr class="text-left border-b hairline eyebrow">
+                <th class="py-2 pr-3">Ref</th>
+                <th class="py-2 pr-3">Finding</th>
+                <th class="py-2 pr-3 text-center">Best</th>
+                <th class="py-2 pr-3 text-center">Base</th>
+                <th class="py-2 text-center">Worst</th>
+              </tr>
+            </thead>
+            <tbody id="ach-body"></tbody>
+            <tfoot id="ach-foot"></tfoot>
+          </table>
+        </div>
+        <div class="mt-4 pt-4 border-t hairline flex flex-wrap items-center gap-4 mono text-[11px]" style="color:var(--slate-soft)">
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm inline-block" style="background:var(--confirm)"></span>C — Consistent</span>
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm inline-block" style="background:var(--accent)"></span>I — Inconsistent</span>
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm inline-block border" style="background:var(--panel-alt); border-color:var(--border-strong)"></span>N — Neutral</span>
+        </div>
+        <p id="ach-summary" class="text-sm mt-4 leading-relaxed" style="color:var(--ink)"></p>
+      </div>
+    </div>
+
+    <!-- After resolution -->
+    <div class="mt-8">
+      <div class="flex items-center gap-2 mb-3">
+        <i data-lucide="clipboard-check" style="width:14px;height:14px;color:var(--slate)"></i>
+        <span class="eyebrow">After resolution — fill in after 6 Oct 2026</span>
+      </div>
+      <div class="panel rounded-sm p-5 md:p-6 grid md:grid-cols-2 gap-5">
+        <div>
+          <label class="eyebrow block mb-1.5" for="ar-outcome">Actual outcome</label>
+          <select id="ar-outcome" class="focus-ring w-full rounded-sm border hairline px-3 py-2 text-sm mono" style="background:var(--panel-alt); color:var(--ink)">
+            <option value="">— not yet resolved —</option>
+            <option value="YES">YES</option>
+            <option value="NO">NO</option>
+            <option value="UNCERTAIN">UNCERTAIN</option>
+          </select>
+        </div>
+        <div>
+          <label class="eyebrow block mb-1.5" for="ar-right">Was the forecast right?</label>
+          <select id="ar-right" class="focus-ring w-full rounded-sm border hairline px-3 py-2 text-sm mono" style="background:var(--panel-alt); color:var(--ink)">
+            <option value="">— not yet resolved —</option>
+            <option value="YES">YES</option>
+            <option value="NO">NO</option>
+          </select>
+        </div>
+        <div>
+          <label class="eyebrow block mb-1.5" for="ar-url">Source URL</label>
+          <input id="ar-url" type="url" placeholder="https://…" class="focus-ring w-full rounded-sm border hairline px-3 py-2 text-sm" style="background:var(--panel-alt); color:var(--ink)">
+        </div>
+        <div>
+          <label class="eyebrow block mb-1.5" for="ar-reason">Main reason if wrong</label>
+          <input id="ar-reason" type="text" placeholder="—" class="focus-ring w-full rounded-sm border hairline px-3 py-2 text-sm" style="background:var(--panel-alt); color:var(--ink)">
+        </div>
+        <p class="md:col-span-2 mono text-[10px] mt-1" style="color:var(--slate-soft)">Saved locally in this browser only (no server, no sync) — same fields as the sheet's own After Resolution row.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="pt-6 border-t hairline mono text-[11px]" style="color:var(--slate-soft)">
+    PIR SC-09 · Himanshu · Due 25 Sep 2026 23:59 · Source of truth: SC-09_Himanshu.xlsx, Student_Dashboard tab · No figures on this page were invented or estimated.
+  </footer>
+
+</main>
+
+<script>
+/* =========================================================================
+   DATA — transcribed 1:1 from SC-09_Himanshu.xlsx, Student_Dashboard tab.
+   ========================================================================= */
+
+const EEIS = [
+  { id:'EEI1', text:"What was each maker's individual September revenue, and does any one diverge sharply and get masked inside the combined total?", evidence:['E1','E2','E3','E4'] },
+  { id:'EEI2', text:"Has Unimicron said anything newer than 29 July on ABF utilisation, even informally?", evidence:['E10','E2'] },
+  { id:'EEI3', text:"Has Ajinomoto confirmed, denied, or extended the reported 30% China supply cut?", evidence:['E5','E6'] },
+  { id:'EEI4', text:"Has Kuangfu Plant 2 Phase 3 (due Q3 2026) been confirmed as actually online?", evidence:['E11'] },
+  { id:'EEI5', text:"Any reports of a maker turning away orders or quoting longer lead times, as a qualitative tightness signal?", evidence:['E2'] },
+  { id:'EEI6', text:"Do Ibiden or Shinko Electric (Japan-side makers, same node, outside our three) corroborate or contradict the Taiwan-side picture?", evidence:['E12'] },
+  { id:'EEI7', text:"Has Ajinomoto announced any new ABF film capacity that would ease the upstream constraint?", evidence:[] },
+  { id:'EEI8', text:"Was Nan Ya PCB's August dip ever explained, order timing versus a real capacity issue?", evidence:['E4'] },
+  { id:'EEI9', text:"Did all three TWSE filings actually land on schedule this cycle, or did the fallback trigger?", evidence:['E1','E3','E4'], note:"No September-cycle filings are due yet (fallback logic applies after 6 Oct). Linked items show the historical filing pattern from the prior cycle." },
+  { id:'EEI10', text:"Has any customer (Nvidia, AMD, Intel, or a named packager) referenced ABF/substrate lead times in their own earnings commentary?", evidence:['E13'] },
+];
+
+const EVIDENCE = {
+  E1:  { date:'10 Aug 2026', finding:"Unimicron's July 2026 revenue was NT$16.25bn, up 9.11% MoM, a 4th consecutive monthly record.", source:'Taiwan News / CTEE, 10 Aug 2026', grade:'B', verified:'Y', secondSource:"Unimicron's own IR page shows the same July figure", verdict:'Confirmed, cross-verified' },
+  E2:  { date:'8 Sept 2026', finding:"Unimicron's August revenue ~NT$17.7bn (+9% MoM); management said ABF is 'in short supply' and customers are signing LTAs.", source:'BigGo Finance earnings call summary, 8 Sept 2026', grade:'B', verified:'N', secondSource:'-', verdict:'Single-sourced management commentary' },
+  E3:  { date:'4 Sept 2026', finding:"Kinsus's August 2026 revenue was NT$4.81bn, +5.73% MoM, +40.58% YoY.", source:'Kinsus Interconnect — own IR Monthly Revenue page (S3), cross-checked via Cnyes news flash, 4 Sept 2026', grade:'A', verified:'Y', secondSource:'Independently matched by two separate AI research passes (DeepSeek + Kimi)', verdict:'Confirmed' },
+  E4:  { date:'3 Sept 2026', finding:"Nan Ya PCB's August 2026 revenue was NT$5.35bn, -1.6% MoM.", source:'Nan Ya PCB — own IR Financial Reports page (S2), cross-checked via Cnyes news flash, 3 Sept 2026', grade:'A', verified:'Y', secondSource:'Matched by both research passes; corrected an initial NT$53.53bn units error', verdict:'Confirmed after correction' },
+  E5:  { date:'19-20 Aug 2026', finding:"Ajinomoto reportedly cut ABF allocation to China by 30%; NOT officially confirmed by the company.", source:"Tom's Hardware, 19 Aug 2026, citing industry sources", grade:'C', verified:'Y', secondSource:"UDN (20 Aug) independently confirms the 'unconfirmed' status", verdict:'Corroborated as UNCONFIRMED' },
+  E6:  { date:'30 Jun 2026', finding:"Ajinomoto's own briefing stated it had 'no concerns about the supply system across the entire supply chain.'", source:'XenoSpectrum summary of Ajinomoto briefing', grade:'B', verified:'N', secondSource:'-', verdict:'On-record but predates the cut reports; context, not rebuttal' },
+  E7:  { date:'13-14 May 2026', finding:'Ajinomoto notified substrate makers of a ~30% ABF price hike, effective Q3 2026.', source:"Tom's Hardware + 5 other independent outlets, personally verified", grade:'A', verified:'Y', secondSource:'Verified across 6 sources: Digitimes, BigGo, wccftech, AtlasPCB, Bitget, cryptobriefing', verdict:'Confirmed, high confidence' },
+  E8:  { date:'19 Aug 2026', finding:'Goldman Sachs forecasts the ABF supply-demand gap widening from ~10% (H2 2026) to 21% (2027) to 42% (2028).', source:"Tom's Hardware, citing a paywalled Goldman Sachs report", grade:'C', verified:'N', secondSource:'-', verdict:'Single free relay of a paywalled source, directional only' },
+  E9:  { date:'20 Aug 2026', finding:'ABF material use per AI chip is 5 to 10 times that of a traditional CPU.', source:'ABF substrate reference page', grade:'D', verified:'N', secondSource:'-', verdict:'Regraded C→D; corroborated elsewhere but lacks a primary citation' },
+  E10: { date:'29 Jul 2026', finding:"Unimicron's ABF substrate utilisation is 'above 90%' (Q2 2026).", source:'BigGo Finance earnings call summary', grade:'B', verified:'N', secondSource:'-', verdict:'Direct company disclosure, single-sourced as of now' },
+  E11: { date:'29 Jul & 8 Sep 2026', finding:'Kuangfu Plant 2 Phase 3 capacity comes online Q3 2026; backend/full mass production Q2 2027.', source:'BigGo Finance, two earnings calls', grade:'B', verified:'Y', secondSource:'Confirmed as one claim in two parts (via independent research), not a guidance change', verdict:'Confirmed, not a contradiction' },
+  E12: { date:'4-5 Aug 2026', finding:"Ibiden: 'demand continues to exceed industry supply capacity, supporting pricing power.'", source:'Investing.com earnings transcript', grade:'A', verified:'Y', secondSource:'Personally verified across 5 independent outlets (Investing.com, BigGo, stockanalysis, X, note.com)', verdict:'Confirmed, high confidence' },
+  E13: { date:'Q2 2026 (filed ~27 Jun 2026)', finding:"Intel: 'industry-wide shortages of substrates... expected to persist into next year.'", source:'Intel SEC Form 10-Q (primary filing)', grade:'A', verified:'Y', secondSource:'Upgraded from press-release quote to primary regulatory filing on verification', verdict:'Confirmed, primary source' },
+  E14: { date:'10 Aug 2026 (stale by Sept)', finding:"'Unimicron's Hukou plant Phase 2 begins Q3 2026.'", source:'Taiwan News (own earlier research)', grade:'F', verified:'-', secondSource:'-', verdict:'DISCARDED — Unimicron sold this plant to Sigurd in Feb 2026; caught before entering the file', discarded:true },
+};
+
+const SOURCES = [
+  { ref:'S1', name:'Unimicron Technology — Monthly Sales Revenue (own IR page)', family:'Firm Level', url:'https://www.unimicron.com/en/money01.html', publishes:'By ~10th of following month', tenMin:'Y', answers:"Unimicron's own monthly revenue, primary resolving source" },
+  { ref:'S2', name:'Nan Ya PCB — Investor Relations, Financial Reports', family:'Firm Level', url:'https://www.nanyapcb.com.tw/nypcb/english/InvestorRelations/FinancialReports', publishes:'~3rd-5th of following month (earliest, most reliable filer)', tenMin:'Y', answers:"Nan Ya's own monthly revenue, primary + most reliable timing" },
+  { ref:'S3', name:'Kinsus Interconnect — Monthly Revenue page', family:'Firm Level', url:'https://www.kinsus.com.tw/en/annual/monthly_revenue', publishes:'~4th-6th of following month', tenMin:'Y', answers:"Kinsus's own monthly revenue, primary" },
+  { ref:'S4', name:'Taiwan Stock Exchange — Market Observation Post System (MOPS)', family:'Policy & Regulation', url:'https://mops.twse.com.tw/mops/web/t05st10_ifrs', publishes:'Statutory deadline, by the 10th', tenMin:'Y', answers:'Official exchange-mandated monthly filing system for all three makers' },
+  { ref:'S5', name:'BigGo Finance — Unimicron earnings calls (29 Jul & 8 Sep 2026)', family:'Firm Level', url:'https://finance.biggo.com/quote/3037.TW/earnings-call/TW_3037.TW_2026-09-08', publishes:'Published same day as each call', tenMin:'Y', answers:"ABF utilisation figure, 'in short supply' commentary, Kuangfu Plant 2 timeline" },
+  { ref:'S6', name:'Investing.com — Ibiden Q1 FY2026 earnings transcript', family:'Firm Level', url:'https://www.investing.com/news/transcripts/earnings-call-transcript-ibiden-q1-2026-beats-forecasts-lifts-outlook-93CH-4836334', publishes:'Published 4-5 Aug 2026', tenMin:'Y', answers:'"Demand exceeds supply capacity" quote — personally verified across 5 outlets' },
+  { ref:'S7', name:'Intel Corporation — SEC Form 10-Q, Q2 2026', family:'Policy & Regulation', url:'https://www.sec.gov/Archives/edgar/data/0000050863/000005086326000157/intc-20260627.htm', publishes:'Filed per SEC deadline, Q2 2026 period', tenMin:'Y', answers:'Primary regulatory filing citing industry-wide substrate shortage' },
+  { ref:'S8', name:'BigGo Finance — AMD Q2 2026 earnings call', family:'Firm Level', url:'https://finance.biggo.com/news/US_AMD_2026-08-04', publishes:'Published 4 Aug 2026', tenMin:'Y', answers:"Lisa Su's substrate-availability quote, personally verified" },
+  { ref:'S9', name:'Investing.com — Nvidia Q2 2026 earnings call', family:'Firm Level', url:'https://in.investing.com/news/stock-market-news/earnings-call-transcript-nvidia-beats-q2-2026-estimates-as-ai-demand-stays-hot-93CH-5572973', publishes:'Published late Aug 2026', tenMin:'Y', answers:"Huang's supply-strain quote" },
+  { ref:'S10', name:'Tom\'s Hardware — Ajinomoto ABF China cut & price-hike analysis', family:'Trade Press / Policy context', url:'https://www.tomshardware.com/tech-industry/semiconductors/ajinomoto-reportedly-cuts-abf-chip-packaging-film-supply-to-china-by-30-percent', publishes:'Published 19 Aug 2026', tenMin:'Y', answers:'Root-cause narrative, Goldman Sachs supply-gap figures, May 2026 price-hike timing' },
+  { ref:'S11', name:'UDN (Taiwan) — Ajinomoto cut reported unconfirmed', family:'Trade Press', url:'https://udn.com/news/story/7240/9704378', publishes:'Published 20 Aug 2026', tenMin:'Y', answers:'Independent corroboration that Ajinomoto has not confirmed the cut' },
+  { ref:'S12', name:'KGI Securities — PCB sector research (free PDF)', family:'Prices & Benchmarks', url:'https://www.kgi.com.hk/en/-/media/files/kgishk/research-reports/tw-reports/pcb-sector_20260720e.pdf', publishes:'Published 20 Jul 2026', tenMin:'Y', answers:"Nan Ya PCB's ABF utilisation range (80-85%), cross-verifies Gemini's figures" },
+  { ref:'S13', name:'BigGo Finance — Kinsus Q4 2025 earnings call', family:'Firm Level', url:'https://finance.biggo.com/news/TW_3189.TW_2026-03-10', publishes:'Published 10 Mar 2026', tenMin:'Y', answers:"Kinsus's own utilisation guidance (~85%, targeting 90-95% by end-2026)" },
+  { ref:'S14', name:'CPCA (China Printed Circuit Association) — official site', family:'Industry Bodies', url:'https://www.cpca.org.cn/en/index.html', publishes:'Irregular, no monthly cadence found', tenMin:'N', answers:'Background China PCB industry context only; fails 10-min test, flagged openly' },
+  { ref:'S15', name:'Taiwan News / CTEE — PCB makers post record monthly sales', family:'Trade Press', url:'https://www.taiwannews.com.tw/news/6418300', publishes:'Published 10 Aug 2026', tenMin:'Y', answers:'Cross-verifies July company filings against a second, independent outlet' },
+];
+
+const RISKS = [
+  { id:'R1', statement:"Ajinomoto's ~95% market share means any single disruption, confirmed or not, has no substitute path; the unconfirmed China cut is a preview of what a confirmed one would do.", likelihood:'M', impact:'H', owner:'Procurement / Supply Chain', evidence:['E5','E6'] },
+  { id:'R2', statement:"Taiwan's three makers are already structurally tight (Unimicron >90%, Kinsus ~85%, Nan Ya 80-85%); further AI demand growth hits a hard capacity wall regardless of any single company's decisions.", likelihood:'H', impact:'M', owner:'Commercial Planning', evidence:['E10','E3','E4'] },
+  { id:'R3', statement:'The confirmed 30% ABF price hike (effective Q3) compresses margin at every downstream layer, substrate makers, packagers, and ultimately Intel/AMD/Nvidia\'s own COGS.', likelihood:'H', impact:'M', owner:'Finance / Cost Planning', evidence:['E7','E13','E14'] },
+  { id:'R4', statement:"Kuangfu Plant 2's Phase 3 (Q3 2026) is the only near-term supply relief identified; if it slips, no other capacity addition is expected before 2027-2028 industry-wide.", likelihood:'M', impact:'H', owner:'Strategic / Capacity Planning', evidence:['E11'] },
+  { id:'R5', statement:"Downstream demand signals (Intel's 10-Q explicitly naming substrate shortage as revenue-limiting; AMD and Nvidia both citing supply strain) show this constrains chip output at the world's largest buyers, not just a Taiwan-side story.", likelihood:'H', impact:'H', owner:'Strategic / Market Intelligence', evidence:['E12','E13','E14'] },
+  { id:'R6', statement:"Nan Ya PCB's August revenue dip, unexplained, sits inside an otherwise uniformly tight market; if it repeats in September, it is a genuine anomaly worth investigating rather than assumed noise.", likelihood:'L', impact:'M', owner:'Analyst (self)', evidence:['E4'] },
+  { id:'R7', statement:"Ajinomoto's own capacity relief (Gifu plant) isn't due until 2032; every mitigation available to the industry in the next 24 months is demand-side (rationing, price, LTAs), not supply-side.", likelihood:'H', impact:'H', owner:'Strategic / Long-range Planning', evidence:['E6','E9'] },
+  { id:'R8', statement:"China's substrate makers have no qualified domestic ABF alternative at scale; if Beijing's rare-earth dispute with Japan escalates, China's own AI chip packaging capacity is exposed with no near-term workaround.", likelihood:'M', impact:'H', owner:'Geopolitical Risk', evidence:['E5','E10'] },
+];
+
+const SCENARIOS = [
+  { name:'Best case', description:"Kuangfu Plant 2 Phase 3 comes online as scheduled, adding real new capacity, and at least one maker shows genuine relief (shorter lead times, easing utilisation). Ajinomoto's reported China cut turns out to be a temporary reallocation. The ceiling starts to lift, even if revenue keeps growing on price alone.", trigger:'A dated company statement or Taiwan financial press report confirming Kuangfu Phase 3 is actually running, or any maker publicly citing shorter lead times.', implication:'PIR resolves YES on genuine relief, not just price-driven revenue.' },
+  { name:'Base case', description:"Status quo holds. All three makers stay at or near capacity, Unimicron still ≥90%, combined revenue keeps growing on the price hikes even as physical volume is capped. One maker may individually diverge (Nan Ya's August dip could repeat) without the node itself having loosened.", trigger:'Combined September revenue ≥NT$27.9bn and no maker reports eased capacity, even if one company\'s own number is mixed.', implication:'PIR resolves YES on the combined picture, consistent with the current evidence base.' },
+  { name:'Worst case', description:"Ajinomoto's China cut gets confirmed and extends beyond China, Kuangfu Phase 3 slips its quarter, and at least one maker reports an actual revenue miss tied to input shortage, not just order timing. Persistent tightness turns into a real disruption.", trigger:'A sourced report of Ajinomoto restricting supply beyond China, Kuangfu Phase 3 confirmed delayed, or any maker explicitly citing ABF film shortage as the reason for a miss.', implication:'PIR resolves NO; first real evidence of the shortage actually breaking, not just easing.' },
+];
+
+const TECH = [
+  { tech:'Cybersecurity', exposure:'L', why:'Present in fab OT/design systems, not the current driver of the shortage.', mitigation:'Standard segmentation, not a priority spend for this specific risk.' },
+  { tech:'AI/Automation', exposure:'H', why:'The actual demand driver: AI packaging layer counts scaling from 3+3 to 13+13 is what created the shortage.', mitigation:"None at substrate-maker level; real mitigation sits upstream, in Ajinomoto's own 2032 capacity timeline." },
+  { tech:'Digital Twin', exposure:'L', why:'Used in process simulation, not material to whether ABF supply clears the market.', mitigation:'Not applicable to this PIR.' },
+  { tech:'IoT/Sensors', exposure:'L', why:'Fab-floor monitoring only, not a driver of the current shortage.', mitigation:'Not applicable to this PIR.' },
+  { tech:'Blockchain/Traceability', exposure:'L', why:'No evidence found of blockchain-based traceability in use or needed in this chain.', mitigation:'Not applicable to this PIR.' },
+  { tech:'Other: Organic substrate R&D / packaging architecture', exposure:'H', why:'Registry-flagged root cause: packaging layer counts scaling faster than capacity can grow.', mitigation:'LTAs and co-investment between chipmakers and substrate makers, already underway per E2.' },
+];
+
+const CRSM = [
+  { point:'ABF film (Ajinomoto)', concentrate:'Extreme, ~95% single-supplier', regime:"Japanese trade policy; exposed if China's rare-earth dispute with Japan escalates further", substitution:'None at the high end; BT resin exists for lower-tier only; Chinese CBF film exists but <5% qualified coverage', mitigate:'LTAs, prepayment / co-investment (already happening per E2)' },
+  { point:'Advanced packaging capability', concentrate:'High, concentrated in 5 qualified makers (Unimicron, Kinsus, Nan Ya, Ibiden, Shinko)', regime:'Dual-use adjacency; AI chip packaging could draw future export-control attention', substitution:'None, qualification takes years, no fast substitute process', mitigate:'Phased capacity additions (Kuangfu Plant 2 is the test case)' },
+  { point:'Fab capacity / location', concentrate:'High, geographically clustered in Taiwan + Japan', regime:'Taiwan Strait regional risk sits underneath all of it', substitution:'Slow; other geographies could qualify over years, not quarters', mitigate:'Geographic diversification, underway but not fast' },
+];
+
+const DIVERGENCE = [
+  { id:'D1', asked:'How much more ABF material does an AI chip use compared to a traditional CPU?', claimed:'5 to 10 times as much, driven by rising layer counts', checkedOut:'Y', concluded:'Kept the figure, cited to a specialist reference page rather than presented as AI-verified fact.', why:'Corroborated across sources, but the citation is wiki-style, not primary.' },
+  { id:'D2', asked:"Nan Ya PCB's August 2026 revenue", claimed:"'NT$53.53 billion' (DeepSeek)", checkedOut:'N', concluded:'Corrected to NT$5.35 billion.', why:'Units error (亿 mistranslated); caught via cross-check with a second AI tool plus a sanity check against Nan Ya\'s known annual revenue.' },
+  { id:'D3', asked:"Unimicron's Hukou plant expansion timeline", claimed:"'Phase 2 begins Q3 2026' (own earlier research)", checkedOut:'N', concluded:'Dropped entirely.', why:'Fact was stale; Unimicron sold that plant to Sigurd in Feb 2026; caught before it entered the file.' },
+  { id:'D4', asked:'Why Unimicron gave two Kuangfu Plant 2 timelines (Q3 2026 vs 2027)', claimed:'Looked like a contradiction between two earnings calls', checkedOut:'Resolved, not a contradiction', concluded:'Two phases of the same plant, not revised guidance.', why:"The 29 Jul call already distinguished 'third phase, Q3 2026' from 'backend, Q2 2027' in the same breath." },
+  { id:'D5', asked:'Whether Kinsus filed August revenue on schedule', claimed:'DeepSeek: irregular/late (23 Sep); Kimi: on schedule (4 Sep)', checkedOut:'Both true', concluded:'Two separate disclosures, not a conflict.', why:'Routine filing on the 4th, plus a second, regulatory-triggered disclosure on the 23rd for an unrelated reason.' },
+  { id:'D6', asked:"When Unimicron's Q3 2026 earnings call would happen", claimed:"Assumed 'likely late October' without checking", checkedOut:'Y, and it mattered', concluded:'Confirmed directly: 27 October 2026.', why:'This single check killed an earlier PIR draft that wrongly assumed the data would land inside the window.' },
+  { id:'D7', asked:'Whether CPCA publishes usable monthly ABF data', claimed:"Assumed it would, similar to Taiwan's system", checkedOut:'N', concluded:'Dropped as a resolving source; kept only as weak background.', why:"English site's most recent visible update was Jan 2024; no monthly cadence exists." },
+  { id:'D8', asked:"Ibiden's supply-capacity quote and Ajinomoto's May 2026 price-hike timing (Gemini)", claimed:'Both presented as fact', checkedOut:'Y, both held up', concluded:'Kept as-is, confidence upgraded.', why:'Independently verified across 5+ separate outlets each; worth logging where AI research checked out, not just where it failed.' },
+];
+
+/* Revenue trend: Unimicron's two points are disclosed directly (E1, E2).
+   Kinsus/Nan Ya July points are derived from their disclosed Aug figure and disclosed MoM% (E3, E4) — flagged derived:true. */
+const REVENUE_TREND = [
+  { maker:'Unimicron', july:16.25, july_derived:false, august:17.7, august_approx:true },
+  { maker:'Kinsus', july:4.55, july_derived:true, august:4.81, august_approx:false },
+  { maker:'Nan Ya PCB', july:5.44, july_derived:true, august:5.35, august_approx:false },
+];
+
+/* Utilisation ranges as actually reported — Unimicron floor-only (E10), Kinsus point est. (S13), Nan Ya disclosed range (S12). Matches the comparison already drawn in R2. */
+const UTILISATION = [
+  { maker:'Unimicron', range:[90,100], label:'>90% (floor only)', source:'E10, 29 Jul 2026' },
+  { maker:'Kinsus', range:[84,86], label:'~85%', source:'Section B · S13' },
+  { maker:'Nan Ya PCB', range:[80,85], label:'80-85%', source:'Section B · S12' },
+];
+
+/* Only dated, sourced events — no earlier lead-up event exists in the evidence base. */
+const PRICEHIKE_TIMELINE = [
+  { date:'13-14 May 2026', label:'Price hike announced', detail:'Ajinomoto notifies substrate makers of a ~30% ABF price hike (E7).' },
+  { date:'Q3 2026', label:'Hike takes effect', detail:'Effective date stated in the same May notification (E7).' },
+  { date:'19-20 Aug 2026', label:'China cut reported', detail:"Ajinomoto reportedly cuts ABF allocation to China by 30%, unconfirmed by the company (E5); UDN corroborates the 'unconfirmed' status days later." },
+];
+
+/* Sensitivity baseline — real August 2026 figures (E2, E3, E4) and each maker's own actual Jul→Aug growth rate as the default slider position. */
+const SENSITIVITY_BASELINE = [
+  { maker:'Unimicron', august:17.7, defaultGrowth:9.1 },
+  { maker:'Kinsus', august:4.81, defaultGrowth:5.7 },
+  { maker:'Nan Ya PCB', august:5.35, defaultGrowth:-1.6 },
+];
+const SEPT_THRESHOLD = 27.9;
+
+/* ACH matrix — each evidence item coded against the three scenarios already defined in Section E.
+   C = Consistent, I = Inconsistent, N = Neutral/not diagnostic. E14 (discarded) scored N/N/N: a
+   retracted, factually-wrong item carries no diagnostic weight for or against any hypothesis. */
+const ACH = [
+  { ref:'E1', best:'N', base:'C', worst:'I' },
+  { ref:'E2', best:'I', base:'C', worst:'I' },
+  { ref:'E3', best:'N', base:'C', worst:'I' },
+  { ref:'E4', best:'N', base:'C', worst:'N' },
+  { ref:'E5', best:'N', base:'N', worst:'I' },
+  { ref:'E6', best:'C', base:'N', worst:'I' },
+  { ref:'E7', best:'N', base:'C', worst:'N' },
+  { ref:'E8', best:'I', base:'N', worst:'C' },
+  { ref:'E9', best:'N', base:'N', worst:'N' },
+  { ref:'E10', best:'N', base:'C', worst:'N' },
+  { ref:'E11', best:'C', base:'N', worst:'I' },
+  { ref:'E12', best:'I', base:'N', worst:'N' },
+  { ref:'E13', best:'I', base:'N', worst:'C' },
+  { ref:'E14', best:'N', base:'N', worst:'N' },
+];
+
+/* =========================================================================
+   HELPERS
+   ========================================================================= */
+
+const gradeColor = g => g === 'A' || g === 'B' ? 'var(--confirm)' : g === 'F' ? 'var(--accent)' : 'var(--ink-soft)';
+const levelWeight = { H:3, M:2, L:1 };
+
+function chip(text, extraClass=''){
+  return `<span class="tag-chip mono text-[11px] px-2 py-0.5 rounded-sm border hairline ${extraClass}" style="color:var(--slate); background:var(--panel-alt)">${text}</span>`;
+}
+
+/* =========================================================================
+   SECTION A — EEI drilldown
+   ========================================================================= */
+
+let activeEei = null;
+let activeEvidence = null;
+
+function renderEeiList(){
+  const el = document.getElementById('eei-list');
+  el.innerHTML = EEIS.map((eei, i) => `
+    <button
+      class="focus-ring w-full text-left px-4 py-3 border-b hairline flex items-start gap-3 transition-colors"
+      style="background:${activeEei === eei.id ? 'var(--panel-alt)' : 'transparent'}; border-left:3px solid ${activeEei === eei.id ? 'var(--ink-soft)' : 'transparent'}"
+      data-eei="${eei.id}" role="option" aria-selected="${activeEei === eei.id}">
+      <span class="mono text-[11px] font-semibold shrink-0 pt-0.5" style="color:var(--slate-soft)">${String(i+1).padStart(2,'0')}</span>
+      <span class="text-[13px] leading-snug" style="color:var(--ink)">${eei.text}</span>
+    </button>
+  `).join('');
+  el.querySelectorAll('[data-eei]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeEei = btn.getAttribute('data-eei');
+      activeEvidence = null;
+      renderEeiList();
+      renderEvidencePanel();
+    });
+  });
+}
+
+function renderEvidencePanel(){
+  const el = document.getElementById('evidence-panel');
+  if(!activeEei){
+    el.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-center py-16">
+      <i data-lucide="mouse-pointer-click" style="width:22px;height:22px;color:var(--slate-soft)"></i>
+      <p class="mono text-[12px] mt-3" style="color:var(--slate-soft)">Select an EEI to see the evidence base behind it.</p>
+    </div>`;
+    lucide.createIcons();
+    return;
+  }
+  const eei = EEIS.find(e => e.id === activeEei);
+  const idx = EEIS.findIndex(e => e.id === activeEei) + 1;
+
+  let evidenceHtml;
+  if(eei.evidence.length === 0){
+    evidenceHtml = `<div class="mt-4 rounded-sm border hairline p-4" style="background:var(--accent-bg); border-color:var(--accent-soft)">
+      <p class="text-sm" style="color:var(--accent)">No evidence item in Section C directly resolves this EEI yet. Logged here as an open gap, not filled with a guess.</p>
+    </div>`;
+  } else {
+    evidenceHtml = `<div class="mt-4 space-y-2">` + eei.evidence.map(eid => {
+      const ev = EVIDENCE[eid];
+      const isActive = activeEvidence === eid;
+      return `
+        <div class="rounded-sm border hairline">
+          <button class="focus-ring w-full text-left px-4 py-3 flex items-center justify-between gap-3" data-ev="${eid}" style="background:${isActive ? 'var(--panel-alt)' : 'var(--panel)'}">
+            <div class="flex items-center gap-3 min-w-0">
+              <span class="mono text-[11px] font-semibold shrink-0" style="color:var(--slate-soft)">${eid}${ev.discarded ? ' · discard' : ''}</span>
+              <span class="text-[13px] truncate" style="color:var(--ink)">${ev.finding}</span>
+            </div>
+            <span class="badge px-1.5 py-0.5 rounded-sm shrink-0 border" style="color:${gradeColor(ev.grade)}; border-color:${gradeColor(ev.grade)}">${ev.grade}</span>
+          </button>
+          ${isActive ? `
+            <div class="px-4 pb-4 pt-1 border-t hairline text-[13px] leading-relaxed space-y-2.5" style="background:var(--panel-alt)">
+              <div><span class="eyebrow">Date</span><div style="color:var(--ink)">${ev.date}</div></div>
+              <div><span class="eyebrow">Source</span><div style="color:var(--ink)">${ev.source}</div></div>
+              <div class="flex flex-wrap gap-3 pt-1">
+                <div class="flex items-center gap-1.5">
+                  <span class="eyebrow">Grade</span>
+                  <span class="badge px-1.5 py-0.5 rounded-sm border" style="color:${gradeColor(ev.grade)}; border-color:${gradeColor(ev.grade)}">${ev.grade}</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <span class="eyebrow">2nd source</span>
+                  <span class="mono text-[11px] px-1.5 py-0.5 rounded-sm" style="color:${ev.verified==='Y' ? 'var(--confirm)' : 'var(--accent)'}; background:${ev.verified==='Y' ? 'var(--confirm-soft)' : 'var(--accent-bg)'}">${ev.verified}</span>
+                </div>
+              </div>
+              ${ev.secondSource !== '-' ? `<div><span class="eyebrow">Corroboration</span><div style="color:var(--slate)">${ev.secondSource}</div></div>` : ''}
+              <div><span class="eyebrow">Verdict</span><div style="color:${ev.discarded ? 'var(--accent)' : 'var(--ink)'}; font-weight:${ev.discarded ? '600':'400'}">${ev.verdict}</div></div>
+            </div>
+          ` : ''}
+        </div>`;
+    }).join('') + `</div>`;
+  }
+
+  el.innerHTML = `
+    <div class="mono text-[11px] mb-1" style="color:var(--slate-soft)">EEI ${String(idx).padStart(2,'0')}</div>
+    <h3 class="text-base font-medium mb-1" style="color:var(--ink-soft)">${eei.text}</h3>
+    ${eei.note ? `<p class="text-[12px] mt-2 mono" style="color:var(--slate-soft)">${eei.note}</p>` : ''}
+    ${evidenceHtml}
+  `;
+
+  el.querySelectorAll('[data-ev]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-ev');
+      activeEvidence = activeEvidence === id ? null : id;
+      renderEvidencePanel();
+    });
+  });
+}
+
+function renderSourceRegistry(){
+  const body = document.getElementById('source-registry-body');
+  body.innerHTML = SOURCES.map(s => `
+    <tr class="border-b hairline align-top" data-ref="${s.ref}">
+      <td class="py-2.5 pr-3 mono text-[12px]" style="color:var(--slate-soft)">${s.ref}</td>
+      <td class="py-2.5 pr-3">
+        <a href="${s.url}" target="_blank" rel="noopener noreferrer" class="focus-ring hover:underline" style="color:var(--ink-soft)">${s.name}</a>
+      </td>
+      <td class="py-2.5 pr-3">${chip(s.family)}</td>
+      <td class="py-2.5 pr-3 text-[12px]" style="color:var(--slate)">${s.publishes}</td>
+      <td class="py-2.5 pr-3">
+        <span class="mono text-[11px] px-1.5 py-0.5 rounded-sm" style="color:${s.tenMin==='Y' ? 'var(--confirm)' : 'var(--accent)'}; background:${s.tenMin==='Y' ? 'var(--confirm-soft)' : 'var(--accent-bg)'}">${s.tenMin}</span>
+      </td>
+      <td class="py-2.5 text-[12px]" style="color:var(--slate)">${s.answers}</td>
+    </tr>
+  `).join('');
+}
+
+function renderEvidenceRegistry(){
+  const body = document.getElementById('evidence-registry-body');
+  const order = ['E1','E2','E3','E4','E5','E6','E7','E8','E9','E10','E11','E12','E13','E14'];
+  body.innerHTML = order.map(eid => {
+    const ev = EVIDENCE[eid];
+    const rowStyle = ev.discarded ? `background:var(--accent-bg);` : '';
+    return `
+    <tr class="border-b hairline align-top" style="${rowStyle}" data-ref="${eid}">
+      <td class="py-2.5 pr-3 mono text-[12px] font-semibold" style="color:${ev.discarded ? 'var(--accent)' : 'var(--slate-soft)'}">${eid}${ev.discarded ? ' (discard)' : ''}</td>
+      <td class="py-2.5 pr-3 text-[12px] whitespace-nowrap" style="color:var(--slate)">${ev.date}</td>
+      <td class="py-2.5 pr-3 text-[12px]" style="color:${ev.discarded ? 'var(--accent)' : 'var(--ink)'}">${ev.finding}</td>
+      <td class="py-2.5 pr-3 text-[12px]" style="color:var(--slate)">${ev.source}</td>
+      <td class="py-2.5 pr-3">
+        <span class="badge px-1.5 py-0.5 rounded-sm border" style="color:${gradeColor(ev.grade)}; border-color:${gradeColor(ev.grade)}">${ev.grade}</span>
+      </td>
+      <td class="py-2.5 pr-3">
+        <span class="mono text-[11px] px-1.5 py-0.5 rounded-sm" style="color:${ev.verified==='Y' ? 'var(--confirm)' : 'var(--accent)'}; background:${ev.verified==='Y' ? 'var(--confirm-soft)' : 'var(--accent-bg)'}">${ev.verified}</span>
+      </td>
+      <td class="py-2.5 text-[12px] font-medium" style="color:${ev.discarded ? 'var(--accent)' : 'var(--ink)'}">${ev.verdict}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* =========================================================================
+   SECTION C — Evidence visualized: revenue trend, utilisation, timeline
+   ========================================================================= */
+
+function renderRevenueChart(){
+  const ctx = document.getElementById('revenue-chart');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: ['July 2026', 'August 2026'],
+      datasets: REVENUE_TREND.map((m, i) => {
+        const colors = ['#1F3A52', '#3E7C63', '#64798C'];
+        return {
+          label: m.maker,
+          data: [m.july, m.august],
+          borderColor: colors[i],
+          backgroundColor: colors[i],
+          pointBackgroundColor: [m.july_derived ? '#FFFFFF' : colors[i], m.august_approx ? '#FFFFFF' : colors[i]],
+          pointBorderColor: colors[i],
+          pointBorderWidth: 1.5,
+          pointRadius: 5,
+          borderWidth: 2,
+          tension: 0,
+        };
+      })
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? false : { duration: 300 },
+      scales: {
+        y: { title: { display: true, text: 'NT$ billion', color: '#64798C', font: { family: 'IBM Plex Mono', size: 10 } }, ticks: { color: '#64798C', font: { family: 'IBM Plex Mono', size: 10 } }, grid: { color: '#E2E7EB' } },
+        x: { ticks: { color: '#64798C', font: { family: 'IBM Plex Mono', size: 10 } }, grid: { display: false } },
+      },
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#1F3A52', font: { family: 'IBM Plex Mono', size: 10 }, boxWidth: 12, boxHeight: 12 } },
+        tooltip: {
+          backgroundColor: '#16283A',
+          titleFont: { family: 'IBM Plex Mono', size: 11 },
+          bodyFont: { family: 'IBM Plex Sans', size: 12 },
+          callbacks: {
+            label: (item) => {
+              const m = REVENUE_TREND[item.datasetIndex];
+              const isJuly = item.dataIndex === 0;
+              const note = isJuly ? (m.july_derived ? ' (derived from MoM%, not separately disclosed)' : ' (disclosed)') : (m.august_approx ? ' (approx., as disclosed)' : ' (disclosed)');
+              return `${m.maker}: NT$${item.raw}bn${note}`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderUtilisationChart(){
+  const ctx = document.getElementById('utilisation-chart');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: UTILISATION.map(u => u.maker),
+      datasets: [{
+        data: UTILISATION.map(u => u.range),
+        backgroundColor: ['#1F3A52', '#3E7C63', '#64798C'],
+        borderRadius: 2,
+        barThickness: 44,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? false : { duration: 300 },
+      scales: {
+        y: { min: 0, max: 100, title: { display: true, text: 'ABF utilisation %', color: '#64798C', font: { family: 'IBM Plex Mono', size: 10 } }, ticks: { color: '#64798C', font: { family: 'IBM Plex Mono', size: 10 } }, grid: { color: '#E2E7EB' } },
+        x: { ticks: { color: '#64798C', font: { family: 'IBM Plex Mono', size: 10 } }, grid: { display: false } },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#16283A',
+          titleFont: { family: 'IBM Plex Mono', size: 11 },
+          bodyFont: { family: 'IBM Plex Sans', size: 12 },
+          callbacks: {
+            label: (item) => {
+              const u = UTILISATION[item.dataIndex];
+              return [`${u.label}`, `Source: ${u.source}`];
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderPricehikeTimeline(){
+  const el = document.getElementById('pricehike-timeline');
+  const n = PRICEHIKE_TIMELINE.length;
+  const margin = 120;
+  const width = Math.max(820, n * 280);
+  const stepX = (width - margin * 2) / (n - 1);
+  const y = 46;
+  const dots = PRICEHIKE_TIMELINE.map((_, i) => margin + i * stepX);
+  const svg = `
+  <svg viewBox="0 0 ${width} 150" xmlns="http://www.w3.org/2000/svg" style="min-width:${Math.min(width,820)}px; width:100%; height:auto;" role="img" aria-label="Timeline of the Ajinomoto price-hike story from May announcement to August China cut report">
+    <line x1="${margin}" y1="${y}" x2="${width-margin}" y2="${y}" stroke="#D7DEE5" stroke-width="2"/>
+    ${dots.map((x, i) => `<circle cx="${x}" cy="${y}" r="6" fill="#FFFFFF" stroke="${i === n-1 ? '#C4432B' : '#1F3A52'}" stroke-width="2.5"/>`).join('')}
+    ${dots.map((x, i) => {
+      const item = PRICEHIKE_TIMELINE[i];
+      return `
+      <text x="${x}" y="${y-18}" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#64798C">${item.date}</text>
+      <text x="${x}" y="${y+28}" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="600" fill="#16283A">${item.label}</text>
+      <foreignObject x="${x-105}" y="${y+38}" width="210" height="60">
+        <p xmlns="http://www.w3.org/1999/xhtml" style="font-family:'IBM Plex Sans',sans-serif; font-size:11px; line-height:1.4; color:#64798C; text-align:center; margin:0;">${item.detail}</p>
+      </foreignObject>`;
+    }).join('')}
+  </svg>`;
+  el.innerHTML = svg;
+}
+
+/* =========================================================================
+   SECTION D — Risk heatmap
+   ========================================================================= */
+
+let activeRisk = null;
+let riskChart = null;
+
+function severityColor(l, i){
+  const w = levelWeight[l] + levelWeight[i];
+  if(l === 'H' && i === 'H') return 'var(--accent)';
+  if(w >= 5) return '#8C5B4E';
+  if(w >= 4) return 'var(--ink-soft)';
+  return 'var(--slate-soft)';
+}
+
+function jitter(n){ return (n - 0.5) * 0.18; }
+
+function renderRiskChart(){
+  const ctx = document.getElementById('risk-chart');
+  const seen = {};
+  const points = RISKS.map(r => {
+    const key = r.likelihood + r.impact;
+    seen[key] = (seen[key] || 0);
+    const n = seen[key]++;
+    return {
+      x: levelWeight[r.likelihood] + jitter(n%2) ,
+      y: levelWeight[r.impact] + jitter(Math.floor(n/2)%2),
+      risk: r,
+    };
+  });
+
+  riskChart = new Chart(ctx, {
+    type: 'scatter',
+    plugins: [{
+      id: 'heatmapBg',
+      beforeDraw(chart){
+        const { ctx, chartArea } = chart;
+        if(!chartArea) return;
+        const { left, right, top, bottom } = chartArea;
+        const grad = ctx.createLinearGradient(left, bottom, right, top);
+        grad.addColorStop(0, 'rgba(62,124,99,0.09)');
+        grad.addColorStop(0.5, 'rgba(168,121,26,0.09)');
+        grad.addColorStop(1, 'rgba(196,67,43,0.13)');
+        ctx.save();
+        ctx.fillStyle = grad;
+        ctx.fillRect(left, top, right - left, bottom - top);
+        ctx.restore();
+      }
+    }],
+    data: {
+      datasets: [{
+        data: points,
+        pointRadius: 9,
+        pointHoverRadius: 11,
+        backgroundColor: points.map(p => severityColor(p.risk.likelihood, p.risk.impact)),
+        borderColor: '#FFFFFF',
+        borderWidth: 1.5,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? false : { duration: 300 },
+      scales: {
+        x: {
+          min: 0.5, max: 3.5,
+          ticks: { callback: v => ({1:'Low',2:'Medium',3:'High'}[v] || ''), stepSize: 1, color: '#64798C', font: { family: 'IBM Plex Mono', size: 11 } },
+          title: { display: true, text: 'LIKELIHOOD', color: '#64798C', font: { family: 'IBM Plex Mono', size: 11, weight: '500' } },
+          grid: { color: '#E2E7EB' },
+        },
+        y: {
+          min: 0.5, max: 3.5,
+          ticks: { callback: v => ({1:'Low',2:'Medium',3:'High'}[v] || ''), stepSize: 1, color: '#64798C', font: { family: 'IBM Plex Mono', size: 11 } },
+          title: { display: true, text: 'IMPACT', color: '#64798C', font: { family: 'IBM Plex Mono', size: 11, weight: '500' } },
+          grid: { color: '#E2E7EB' },
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#16283A',
+          titleFont: { family: 'IBM Plex Mono', size: 11 },
+          bodyFont: { family: 'IBM Plex Sans', size: 12 },
+          callbacks: {
+            title: items => items[0].raw.risk.id,
+            label: item => item.raw.risk.statement.slice(0, 70) + '…',
+          }
+        }
+      },
+      onClick: (evt, elements) => {
+        if(elements.length){
+          activeRisk = points[elements[0].index].risk.id;
+          renderRiskDetail();
+        }
+      },
+      onHover: (evt, elements) => {
+        evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+      }
+    }
+  });
+}
+
+function renderRiskDetail(){
+  const el = document.getElementById('risk-detail');
+  if(!activeRisk){
+    el.innerHTML = `
+      <div class="eyebrow mb-3">Risk register</div>
+      <div class="space-y-2">
+        ${RISKS.map(r => `
+          <button data-risk="${r.id}" class="focus-ring w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-sm border hairline hover:bg-[--panel-alt]" style="background:var(--panel-alt)">
+            <span class="w-2 h-2 rounded-full shrink-0" style="background:${severityColor(r.likelihood, r.impact)}"></span>
+            <span class="mono text-[11px] font-semibold" style="color:var(--slate-soft)">${r.id}</span>
+            <span class="text-[12px] truncate" style="color:var(--ink)">${r.statement.slice(0,52)}…</span>
+          </button>
+        `).join('')}
+      </div>`;
+  } else {
+    const r = RISKS.find(x => x.id === activeRisk);
+    const isHigh = r.likelihood === 'H' && r.impact === 'H';
+    el.innerHTML = `
+      <button data-back class="focus-ring flex items-center gap-1.5 mono text-[11px] mb-4" style="color:var(--slate)">
+        <i data-lucide="arrow-left" style="width:12px;height:12px"></i> all risks
+      </button>
+      <div class="flex items-center gap-2 mb-3">
+        <span class="mono text-sm font-semibold px-2 py-0.5 rounded-sm ${isHigh ? '' : ''}" style="color:${isHigh ? 'var(--accent)' : 'var(--ink-soft)'}; background:${isHigh ? 'var(--accent-bg)' : 'var(--panel-alt)'}; border:1px solid ${isHigh ? 'var(--accent-soft)' : 'var(--border)'}">${r.id}</span>
+        <span class="mono text-[11px]" style="color:var(--slate-soft)">L: ${r.likelihood} · I: ${r.impact}</span>
+      </div>
+      <p class="text-[13px] leading-relaxed mb-4" style="color:var(--ink)">${r.statement}</p>
+      <div class="space-y-2 text-[12px] pt-3 border-t hairline">
+        <div><span class="eyebrow">Owner</span><div style="color:var(--slate)">${r.owner}</div></div>
+        <div><span class="eyebrow">Evidence</span><div class="flex flex-wrap gap-1.5 mt-1">${r.evidence.map(e => chip(e + (EVIDENCE[e]?.discarded ? ' (discard)' : ''))).join('')}</div></div>
+      </div>`;
+    const back = el.querySelector('[data-back]');
+    if(back) back.addEventListener('click', () => { activeRisk = null; renderRiskDetail(); });
+  }
+  el.querySelectorAll('[data-risk]').forEach(btn => {
+    btn.addEventListener('click', () => { activeRisk = btn.getAttribute('data-risk'); renderRiskDetail(); });
+  });
+  lucide.createIcons();
+}
+
+/* =========================================================================
+   SECTION E — Scenarios
+   ========================================================================= */
+
+function renderScenarios(){
+  const el = document.getElementById('scenario-cards');
+  el.innerHTML = SCENARIOS.map(s => {
+    const isWorst = s.name === 'Worst case';
+    return `
+    <div class="panel rounded-sm p-5 flex flex-col" style="${isWorst ? 'border-left:3px solid var(--accent)' : ''}">
+      <div class="eyebrow mb-2" style="color:${isWorst ? 'var(--accent)' : 'var(--slate)'}">${s.name}</div>
+      <p class="text-[13px] leading-relaxed mb-4 flex-1" style="color:var(--ink)">${s.description}</p>
+      <div class="mb-3 p-3 rounded-sm" style="background:var(--panel-alt); border:1px solid var(--border)">
+        <div class="eyebrow mb-1">Trigger sign</div>
+        <p class="text-[12px] mono leading-snug" style="color:var(--ink-soft)">${s.trigger}</p>
+      </div>
+      <div>
+        <div class="eyebrow mb-1">PIR implication</div>
+        <p class="text-[12px]" style="color:var(--slate)">${s.implication}</p>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* =========================================================================
+   SECTION F — Tech exposure + CRSM
+   ========================================================================= */
+
+function levelBg(l){
+  if(l === 'H') return { bg:'var(--accent-bg)', fg:'var(--accent)' };
+  if(l === 'M') return { bg:'#EAEFF3', fg:'var(--ink-soft)' };
+  return { bg:'var(--panel-alt)', fg:'var(--slate)' };
+}
+
+function renderTechTable(){
+  const body = document.getElementById('tech-table-body');
+  body.innerHTML = TECH.map(t => {
+    const c = levelBg(t.exposure);
+    return `
+    <tr class="border-b hairline align-top">
+      <td class="py-3 px-4 text-[13px] font-medium" style="color:var(--ink)">${t.tech}</td>
+      <td class="py-3 px-4">
+        <span class="mono text-[11px] font-semibold px-2 py-0.5 rounded-sm" style="color:${c.fg}; background:${c.bg}">${t.exposure}</span>
+      </td>
+      <td class="py-3 px-4 text-[12px]" style="color:var(--slate)">${t.why}</td>
+      <td class="py-3 px-4 text-[12px]" style="color:var(--slate)">${t.mitigation}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderCrsmTable(){
+  const body = document.getElementById('crsm-table-body');
+  body.innerHTML = CRSM.map(c => `
+    <tr class="border-b hairline align-top">
+      <td class="py-3 px-4 text-[13px] font-medium" style="color:var(--ink)">${c.point}</td>
+      <td class="py-3 px-4 text-[12px]" style="color:var(--slate)">${c.concentrate}</td>
+      <td class="py-3 px-4 text-[12px]" style="color:var(--slate)">${c.regime}</td>
+      <td class="py-3 px-4 text-[12px]" style="color:var(--slate)">${c.substitution}</td>
+      <td class="py-3 px-4 text-[12px]" style="color:var(--slate)">${c.mitigate}</td>
+    </tr>
+  `).join('');
+}
+
+/* =========================================================================
+   SUPPLY CHAIN FLOW DIAGRAM (SVG)
+   ========================================================================= */
+
+function renderFlowDiagram(){
+  const el = document.getElementById('flow-diagram');
+  const svg = `
+  <svg viewBox="0 0 980 300" xmlns="http://www.w3.org/2000/svg" style="min-width:820px; width:100%; height:auto;" role="img" aria-label="Supply chain relationship flow from Japan film maker through Taiwan substrate makers to chip buyers, with China flagged as a disputed relationship">
+    <defs>
+      <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+        <path d="M0,0 L8,4 L0,8 Z" fill="#64798C"/>
+      </marker>
+      <marker id="arrow-accent" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+        <path d="M0,0 L8,4 L0,8 Z" fill="#C4432B"/>
+      </marker>
+    </defs>
+
+    <!-- Group frames -->
+    <rect x="20" y="20" width="230" height="220" fill="#F8F9FB" stroke="#D7DEE5" stroke-width="1"/>
+    <text x="34" y="42" font-family="IBM Plex Mono" font-size="11" letter-spacing="1" fill="#64798C">JAPAN — FILM</text>
+
+    <rect x="380" y="20" width="230" height="220" fill="#F8F9FB" stroke="#D7DEE5" stroke-width="1"/>
+    <text x="394" y="42" font-family="IBM Plex Mono" font-size="11" letter-spacing="1" fill="#64798C">TAIWAN — SUBSTRATE</text>
+
+    <rect x="730" y="20" width="230" height="220" fill="#F8F9FB" stroke="#D7DEE5" stroke-width="1"/>
+    <text x="744" y="42" font-family="IBM Plex Mono" font-size="11" letter-spacing="1" fill="#64798C">CHIP BUYERS</text>
+
+    <!-- Japan nodes -->
+    <rect x="40" y="60" width="190" height="46" rx="2" fill="#FFFFFF" stroke="#B9C4CE"/>
+    <text x="135" y="80" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="600" fill="#16283A">Ajinomoto</text>
+    <text x="135" y="96" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#64798C">ABF film, ~95% share</text>
+
+    <rect x="40" y="150" width="190" height="46" rx="2" fill="#FFFFFF" stroke="#B9C4CE"/>
+    <text x="135" y="170" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="600" fill="#16283A">Ibiden / Shinko</text>
+    <text x="135" y="186" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#64798C">Japan-side packagers, same node</text>
+
+    <path d="M135,106 L135,150" stroke="#64798C" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+    <!-- Taiwan nodes -->
+    <rect x="400" y="60" width="190" height="36" rx="2" fill="#FFFFFF" stroke="#B9C4CE"/>
+    <text x="495" y="83" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="600" fill="#16283A">Unimicron</text>
+
+    <rect x="400" y="105" width="190" height="36" rx="2" fill="#FFFFFF" stroke="#B9C4CE"/>
+    <text x="495" y="128" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="600" fill="#16283A">Nan Ya PCB</text>
+
+    <rect x="400" y="150" width="190" height="36" rx="2" fill="#FFFFFF" stroke="#B9C4CE"/>
+    <text x="495" y="173" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="600" fill="#16283A">Kinsus</text>
+
+    <text x="495" y="212" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#64798C">structurally tight: 80-95%+ utilisation</text>
+
+    <path d="M230,68 C290,68 340,72 400,78" stroke="#64798C" stroke-width="1.5" marker-end="url(#arrow)" fill="none"/>
+    <path d="M230,83 C280,83 350,103 400,123" stroke="#64798C" stroke-width="1.5" marker-end="url(#arrow)" fill="none"/>
+    <path d="M230,98 C280,98 360,138 400,168" stroke="#64798C" stroke-width="1.5" marker-end="url(#arrow)" fill="none"/>
+
+    <!-- Buyers -->
+    <rect x="750" y="60" width="190" height="36" rx="2" fill="#FFFFFF" stroke="#B9C4CE"/>
+    <text x="845" y="83" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="600" fill="#16283A">Intel</text>
+
+    <rect x="750" y="105" width="190" height="36" rx="2" fill="#FFFFFF" stroke="#B9C4CE"/>
+    <text x="845" y="128" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="600" fill="#16283A">AMD</text>
+
+    <rect x="750" y="150" width="190" height="36" rx="2" fill="#FFFFFF" stroke="#B9C4CE"/>
+    <text x="845" y="173" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="600" fill="#16283A">Nvidia</text>
+
+    <path d="M590,78 C660,78 690,78 750,78" stroke="#64798C" stroke-width="1.5" marker-end="url(#arrow)" fill="none"/>
+    <path d="M590,123 C660,123 690,123 750,123" stroke="#64798C" stroke-width="1.5" marker-end="url(#arrow)" fill="none"/>
+    <path d="M590,168 C660,168 690,168 750,168" stroke="#64798C" stroke-width="1.5" marker-end="url(#arrow)" fill="none"/>
+
+    <!-- China disputed branch -->
+    <rect x="40" y="245" width="190" height="42" rx="2" fill="#FBEEEA" stroke="#C4432B" stroke-dasharray="4 3"/>
+    <text x="135" y="264" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" font-weight="600" fill="#C4432B">China (customer)</text>
+    <text x="135" y="279" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#C4432B">disputed: ~30% cut, unconfirmed</text>
+    <path d="M135,196 L135,245" stroke="#C4432B" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow-accent)"/>
+  </svg>`;
+  el.innerHTML = svg;
+}
+
+/* =========================================================================
+   SECTION G — Divergence log
+   ========================================================================= */
+
+function checkColor(c){
+  const s = String(c).toLowerCase();
+  if(s.startsWith('y') && !s.includes('and it mattered')) return 'var(--confirm)';
+  if(s === 'y, and it mattered' || s === 'y, both held up') return 'var(--confirm)';
+  if(s.startsWith('n')) return 'var(--accent)';
+  return 'var(--ink-soft)';
+}
+
+function renderDivergence(){
+  const el = document.getElementById('divergence-list');
+  el.innerHTML = DIVERGENCE.map(d => `
+    <details class="panel rounded-sm group">
+      <summary class="focus-ring cursor-pointer list-none px-4 py-3 flex items-center gap-3 justify-between">
+        <div class="flex items-center gap-3 min-w-0">
+          <span class="mono text-[11px] font-semibold shrink-0" style="color:var(--slate-soft)">${d.id}</span>
+          <span class="text-[13px] truncate" style="color:var(--ink)">${d.asked}</span>
+        </div>
+        <span class="mono text-[11px] px-2 py-0.5 rounded-sm shrink-0" style="color:${checkColor(d.checkedOut)}; background:var(--panel-alt); border:1px solid var(--border)">${d.checkedOut}</span>
+      </summary>
+      <div class="px-4 pb-4 pt-1 border-t hairline space-y-2 text-[12px]" style="background:var(--panel-alt)">
+        <div><span class="eyebrow">AI claimed</span><div style="color:var(--ink)">${d.claimed}</div></div>
+        <div><span class="eyebrow">Concluded</span><div style="color:var(--ink)">${d.concluded}</div></div>
+        <div><span class="eyebrow">Why</span><div style="color:var(--slate)">${d.why}</div></div>
+      </div>
+    </details>
+  `).join('');
+}
+
+/* =========================================================================
+   SECTION H — Forecast: live-computed verified-source ratio
+   ========================================================================= */
+
+function computeRatio(){
+  const entries = Object.values(EVIDENCE);
+  const total = entries.length;
+  const verified = entries.filter(e => e.verified === 'Y').length;
+  return { verified, total, pct: Math.round((verified/total)*1000)/10 };
+}
+
+function renderForecastRatio(){
+  const { verified, total, pct } = computeRatio();
+  document.getElementById('header-ratio').textContent = `${pct}%`;
+  document.getElementById('hero-ratio').textContent = `${pct}%`;
+  document.getElementById('ratio-big').textContent = `${pct}%`;
+  document.getElementById('ratio-frac').textContent = `${verified} / ${total} verified`;
+  document.getElementById('ratio-bar').style.width = `${pct}%`;
+}
+
+/* =========================================================================
+   SECTION H — Sensitivity sliders (assumed Sept MoM growth per maker)
+   ========================================================================= */
+
+function computeSensitivity(){
+  let total = 0;
+  const results = SENSITIVITY_BASELINE.map((m, i) => {
+    const slider = document.getElementById(`sens-slider-${i}`);
+    const growth = slider ? parseFloat(slider.value) : m.defaultGrowth;
+    const projected = m.august * (1 + growth / 100);
+    total += projected;
+    return { ...m, growth, projected };
+  });
+  return { results, total };
+}
+
+function updateSensitivity(){
+  const { results, total } = computeSensitivity();
+  results.forEach((r, i) => {
+    document.getElementById(`sens-proj-${i}`).textContent = r.projected.toFixed(2);
+    document.getElementById(`sens-growth-${i}`).textContent = `${r.growth > 0 ? '+' : ''}${r.growth.toFixed(1)}%`;
+  });
+  const totalEl = document.getElementById('sens-total');
+  const verdict = document.getElementById('sens-verdict');
+  const crosses = total >= SEPT_THRESHOLD;
+  const delta = (total - SEPT_THRESHOLD).toFixed(2);
+  totalEl.textContent = total.toFixed(2);
+  totalEl.style.color = crosses ? 'var(--confirm)' : 'var(--accent)';
+  verdict.textContent = crosses ? `Crosses threshold (+${delta}bn)` : `Below threshold (${delta}bn)`;
+  verdict.style.color = crosses ? 'var(--confirm)' : 'var(--accent)';
+  verdict.style.borderColor = crosses ? 'var(--confirm)' : 'var(--accent)';
+  verdict.style.background = crosses ? 'var(--confirm-soft)' : 'var(--accent-bg)';
+}
+
+function renderSensitivitySliders(){
+  const el = document.getElementById('sensitivity-sliders');
+  el.innerHTML = SENSITIVITY_BASELINE.map((m, i) => `
+    <div>
+      <div class="flex flex-wrap items-center justify-between gap-1 mb-1.5">
+        <span class="text-sm font-medium" style="color:var(--ink-soft)">${m.maker}</span>
+        <span class="mono text-[12px]" style="color:var(--slate)">
+          Aug NT$${m.august}bn &rarr; Sep est. <span id="sens-proj-${i}" class="font-semibold" style="color:var(--ink)">&mdash;</span>bn
+          &middot; <span id="sens-growth-${i}" class="font-semibold" style="color:var(--circuit)">${m.defaultGrowth > 0 ? '+' : ''}${m.defaultGrowth}%</span>
+        </span>
+      </div>
+      <input type="range" class="tech-slider w-full" id="sens-slider-${i}" min="-15" max="20" step="0.1" value="${m.defaultGrowth}" aria-label="Assumed September growth rate for ${m.maker}">
+    </div>
+  `).join('');
+
+  SENSITIVITY_BASELINE.forEach((_, i) => {
+    document.getElementById(`sens-slider-${i}`).addEventListener('input', updateSensitivity);
+  });
+  document.getElementById('sens-reset').addEventListener('click', () => {
+    SENSITIVITY_BASELINE.forEach((m, i) => { document.getElementById(`sens-slider-${i}`).value = m.defaultGrowth; });
+    updateSensitivity();
+  });
+  updateSensitivity();
+}
+
+/* =========================================================================
+   SECTION H — ACH matrix (evidence vs. scenario)
+   ========================================================================= */
+
+const achColor = v => v === 'C' ? 'var(--confirm)' : v === 'I' ? 'var(--accent)' : 'var(--slate-soft)';
+const achBg = v => v === 'C' ? 'var(--confirm-soft)' : v === 'I' ? 'var(--accent-bg)' : 'var(--panel-alt)';
+
+function renderAch(){
+  const body = document.getElementById('ach-body');
+  body.innerHTML = ACH.map(row => {
+    const ev = EVIDENCE[row.ref];
+    const cells = ['best','base','worst'].map(k => `<td class="py-2 pr-3 text-center"><span class="mono text-[11px] font-semibold inline-flex items-center justify-center w-6 h-6 rounded-sm border" style="color:${achColor(row[k])}; background:${achBg(row[k])}; border-color:${achColor(row[k])}">${row[k]}</span></td>`).join('');
+    return `
+    <tr class="border-b hairline align-top">
+      <td class="py-2 pr-3 mono text-[12px] font-semibold" style="color:${ev.discarded ? 'var(--accent)' : 'var(--slate-soft)'}">${row.ref}${ev.discarded ? ' (discard)' : ''}</td>
+      <td class="py-2 pr-3 text-[12px]" style="color:var(--slate)">${ev.finding}</td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  const counts = { best: 0, base: 0, worst: 0 };
+  ACH.forEach(row => { ['best','base','worst'].forEach(k => { if(row[k] === 'I') counts[k]++; }); });
+
+  document.getElementById('ach-foot').innerHTML = `
+    <tr class="border-t-2" style="border-color:var(--ink-soft)">
+      <td class="py-2 pr-3 mono text-[11px] font-semibold" style="color:var(--ink-soft)" colspan="2">Inconsistencies (of ${ACH.length})</td>
+      ${['best','base','worst'].map(k => `<td class="py-2 pr-3 text-center mono text-sm font-semibold" style="color:${counts[k] === Math.min(counts.best,counts.base,counts.worst) ? 'var(--confirm)' : 'var(--ink-soft)'}">${counts[k]}</td>`).join('')}
+    </tr>`;
+
+  const scenarioNames = { best:'Best case', base:'Base case', worst:'Worst case' };
+  const fewestKey = Object.keys(counts).reduce((a,b) => counts[b] < counts[a] ? b : a);
+  const mostKey = Object.keys(counts).reduce((a,b) => counts[b] > counts[a] ? b : a);
+  document.getElementById('ach-summary').innerHTML =
+    `<strong>${scenarioNames[fewestKey]}</strong> carries the fewest inconsistencies (${counts[fewestKey]} of ${ACH.length}) — the analytically strongest-surviving hypothesis, not a proven one. That lines up with the existing Moderate-confidence <strong>YES</strong> forecast: Base's own resolution criteria (combined September revenue &ge; NT$27.9bn, no maker showing eased capacity) is exactly what that forecast is betting on. <strong>${scenarioNames[mostKey]}</strong> carries the most (${counts[mostKey]} of ${ACH.length}) and is flagged as weakest-supported — not rejected, since two of its defining triggers (a confirmed China-cut extension, a Kuangfu Phase 3 slip) simply haven't happened yet, not been disproven.`;
+}
+
+/* =========================================================================
+   SECTION H — After resolution (persisted locally in this browser only)
+   ========================================================================= */
+
+function initAfterResolution(){
+  const ids = ['ar-outcome','ar-right','ar-url','ar-reason'];
+  const STORAGE_KEY = 'sc09-after-resolution';
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(e){ saved = {}; }
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(saved[id] !== undefined) el.value = saved[id];
+    const persist = () => {
+      try {
+        const data = {};
+        ids.forEach(i => { const e = document.getElementById(i); if(e) data[i] = e.value; });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch(e){}
+    };
+    el.addEventListener('input', persist);
+    el.addEventListener('change', persist);
+  });
+}
+
+/* =========================================================================
+   Global search (client-side only, filters the embedded dataset)
+   ========================================================================= */
+
+function buildSearchIndex(){
+  const idx = [];
+  EEIS.forEach(e => idx.push({ type:'EEI', id:e.id, label:e.id, text:e.text }));
+  Object.entries(EVIDENCE).forEach(([id, e]) => idx.push({ type:'Evidence', id, label: id + (e.discarded ? ' (discard)' : ''), text:`${e.finding} ${e.source} ${e.verdict}` }));
+  RISKS.forEach(r => idx.push({ type:'Risk', id:r.id, label:r.id, text:`${r.statement} ${r.owner}` }));
+  SOURCES.forEach(s => idx.push({ type:'Source', id:s.ref, label:s.ref, text:`${s.name} ${s.answers}` }));
+  return idx;
+}
+
+function flashRow(rowEl){
+  if(!rowEl) return;
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  rowEl.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+  rowEl.classList.add('row-flash');
+  setTimeout(() => rowEl.classList.remove('row-flash'), 1600);
+}
+
+function jumpToResult(type, id){
+  document.getElementById('search-results').classList.add('hidden');
+  document.getElementById('global-search').value = '';
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const scrollTo = elId => {
+    const tab = sectionToTab(elId);
+    if(tab) setActiveTab(tab, { skipScroll: true });
+    document.getElementById(elId).scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+  };
+  if(type === 'EEI'){
+    scrollTo('sec-a');
+    activeEei = id; activeEvidence = null;
+    renderEeiList(); renderEvidencePanel();
+  } else if(type === 'Evidence'){
+    scrollTo('sec-c');
+    setTimeout(() => flashRow(document.querySelector(`#evidence-registry-body tr[data-ref="${id}"]`)), 350);
+  } else if(type === 'Risk'){
+    scrollTo('sec-d');
+    activeRisk = id;
+    renderRiskDetail();
+  } else if(type === 'Source'){
+    scrollTo('sec-b');
+    setTimeout(() => flashRow(document.querySelector(`#source-registry-body tr[data-ref="${id}"]`)), 350);
+  }
+}
+
+function initSearch(){
+  const SEARCH_INDEX = buildSearchIndex();
+  const input = document.getElementById('global-search');
+  const results = document.getElementById('search-results');
+  const icons = { EEI:'list-checks', Evidence:'shield-check', Risk:'flame', Source:'database' };
+
+  input.addEventListener('input', () => {
+    const q = input.value.trim().toLowerCase();
+    if(q.length < 2){ results.classList.add('hidden'); results.innerHTML = ''; return; }
+    const matches = SEARCH_INDEX.filter(item => item.text.toLowerCase().includes(q) || item.label.toLowerCase().includes(q));
+    if(!matches.length){
+      results.innerHTML = `<div class="p-4 text-sm mono" style="color:var(--slate-soft)">No matches for &quot;${q}&quot;</div>`;
+      results.classList.remove('hidden');
+      return;
+    }
+    let html = '';
+    ['EEI','Evidence','Risk','Source'].forEach(g => {
+      const groupItems = matches.filter(m => m.type === g);
+      if(!groupItems.length) return;
+      html += `<div class="px-4 py-2 eyebrow border-b hairline" style="background:var(--panel-alt)">${g} (${groupItems.length})</div>`;
+      html += groupItems.slice(0, 6).map(m => `
+        <button data-jump-type="${m.type}" data-jump-id="${m.id}" class="search-hit focus-ring w-full text-left px-4 py-2.5 border-b hairline flex items-start gap-2.5">
+          <i data-lucide="${icons[m.type]}" style="width:13px;height:13px;color:var(--circuit); margin-top:2px; flex-shrink:0;"></i>
+          <div class="min-w-0">
+            <div class="mono text-[11px] font-semibold" style="color:var(--ink-soft)">${m.label}</div>
+            <div class="text-[12px] truncate" style="color:var(--slate)">${m.text.slice(0, 110)}</div>
+          </div>
+        </button>`).join('');
+    });
+    results.innerHTML = html;
+    results.classList.remove('hidden');
+    lucide.createIcons();
+    results.querySelectorAll('[data-jump-type]').forEach(btn => {
+      btn.addEventListener('click', () => jumpToResult(btn.getAttribute('data-jump-type'), btn.getAttribute('data-jump-id')));
+    });
+  });
+
+  document.addEventListener('click', (e) => {
+    if(!input.parentElement.parentElement.contains(e.target)){ results.classList.add('hidden'); }
+  });
+  input.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape'){ results.classList.add('hidden'); input.blur(); }
+  });
+}
+
+/* =========================================================================
+   Ambient flow-field background — one continuous animation, page-wide.
+   Drifting nodes + proximity lines in the existing circuit/ink palette.
+   Static single frame under prefers-reduced-motion; pauses when tab hidden.
+   ========================================================================= */
+
+function initFlowBackground(){
+  const canvas = document.getElementById('flow-bg');
+  if(!canvas || !canvas.getContext) return;
+  const ctx = canvas.getContext('2d');
+  // Always animates: this is a single-viewer academic artifact, not a public site,
+  // and continuous motion here was an explicit, repeated request from that one viewer.
+  // The load-once circuit trace and hover transitions elsewhere still respect
+  // prefers-reduced-motion; this ambient background intentionally does not.
+  let w, h, dpr, nodes, rafId = null;
+
+  function resize(){
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = window.innerWidth;
+    h = window.innerHeight;
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const count = Math.min(90, Math.max(34, Math.floor((w * h) / 24000)));
+    const palette = [
+      { r:14, g:124, b:134 },   // circuit teal
+      { r:31, g:58, b:82 },     // ink-soft
+      { r:107, g:93, b:168 },   // violet
+      { r:168, g:121, b:26 },   // gold
+    ];
+    nodes = Array.from({ length: count }, () => {
+      const c = palette[Math.floor(Math.random() * palette.length)];
+      return {
+        x: Math.random() * w, y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.32, vy: (Math.random() - 0.5) * 0.32,
+        r: 1.2 + Math.random() * 1.8,
+        c,
+      };
+    });
+  }
+
+  function draw(){
+    // Trailing fade that erases existing alpha (not paint) so the canvas stays
+    // transparent overall and the aurora layer beneath keeps showing through.
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'source-over';
+    const maxDist = Math.min(160, Math.max(95, w / 8));
+    for(let i = 0; i < nodes.length; i++){
+      const a = nodes[i];
+      for(let j = i + 1; j < nodes.length; j++){
+        const b = nodes[j];
+        const dx = a.x - b.x, dy = a.y - b.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if(dist < maxDist){
+          const alpha = (1 - dist / maxDist) * 0.16;
+          const c = a.c;
+          ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},${alpha})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        }
+      }
+    }
+    for(const n of nodes){
+      ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${n.c.r},${n.c.g},${n.c.b},0.45)`; ctx.fill();
+    }
+  }
+
+  function tick(){
+    for(const n of nodes){
+      n.x += n.vx; n.y += n.vy;
+      if(n.x <= 0 || n.x >= w) n.vx *= -1;
+      if(n.y <= 0 || n.y >= h) n.vy *= -1;
+    }
+    draw();
+    rafId = requestAnimationFrame(tick);
+  }
+
+  resize();
+  draw();
+
+  rafId = requestAnimationFrame(tick);
+  document.addEventListener('visibilitychange', () => {
+    if(document.hidden){
+      if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
+    } else if(!rafId){
+      rafId = requestAnimationFrame(tick);
+    }
+  });
+
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { resize(); draw(); }, 150);
+  });
+}
+
+/* =========================================================================
+   Fallback-rule reference toggle (reachable from within the EEI panel)
+   ========================================================================= */
+
+function initFallbackToggle(){
+  const btn = document.getElementById('fallback-toggle');
+  const panel = document.getElementById('fallback-reference');
+  const chevron = document.getElementById('fallback-chevron');
+  btn.addEventListener('click', () => {
+    const isHidden = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden');
+    chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+  });
+}
+
+/* =========================================================================
+   Scroll-spy for nav tabs
+   ========================================================================= */
+
+/* =========================================================================
+   Tabs — groups the 9 lettered sections into 7 panels so only one group
+   is on screen at a time, instead of one long continuous scroll.
+   ========================================================================= */
+
+const TAB_GROUPS = {
+  t1: ['sec-a'],
+  t2: ['sec-b', 'sec-c'],
+  t3: ['sec-d'],
+  t4: ['sec-e'],
+  t5: ['sec-f', 'sec-flow'],
+  t6: ['sec-g'],
+  t7: ['sec-h'],
+};
+
+function sectionToTab(sectionId){
+  return Object.keys(TAB_GROUPS).find(t => TAB_GROUPS[t].includes(sectionId)) || null;
+}
+
+function setActiveTab(tabId, opts){
+  opts = opts || {};
+  if(!TAB_GROUPS[tabId]) return;
+  Object.entries(TAB_GROUPS).forEach(([tid, sectionIds]) => {
+    const show = tid === tabId;
+    sectionIds.forEach(sid => {
+      const el = document.getElementById(sid);
+      if(el) el.style.display = show ? '' : 'none';
+    });
+  });
+  document.querySelectorAll('[data-tab]').forEach(el => {
+    const isActive = el.getAttribute('data-tab') === tabId;
+    el.classList.toggle('active', isActive);
+    if(el.getAttribute('role') === 'tab') el.setAttribute('aria-selected', String(isActive));
+  });
+  if(!opts.skipScroll){
+    document.getElementById('tab-panel-top').scrollIntoView({ behavior: 'auto', block: 'start' });
+  }
+}
+
+function initTabs(){
+  document.querySelectorAll('[data-tab]').forEach(el => {
+    el.addEventListener('click', () => setActiveTab(el.getAttribute('data-tab')));
+  });
+  setActiveTab('t1', { skipScroll: true });
+}
+
+/* =========================================================================
+   Loading screen — minimum display time so it never just flickers,
+   then fades out once the page (fonts, CDN scripts) has actually loaded.
+   ========================================================================= */
+
+function initLoader(){
+  const loader = document.getElementById('loader');
+  if(!loader) return;
+  const MIN_MS = 5000;
+  const start = Date.now();
+  const dismiss = () => {
+    const wait = Math.max(0, MIN_MS - (Date.now() - start));
+    setTimeout(() => {
+      loader.classList.add('hide');
+      setTimeout(() => loader.remove(), 500);
+    }, wait);
+  };
+  if(document.readyState === 'complete') dismiss();
+  else window.addEventListener('load', dismiss);
+}
+
+/* =========================================================================
+   INIT
+   ========================================================================= */
+
+initLoader();
+initFlowBackground();
+renderEeiList();
+renderEvidencePanel();
+renderSourceRegistry();
+renderEvidenceRegistry();
+renderRiskChart();
+renderRiskDetail();
+renderScenarios();
+renderTechTable();
+renderCrsmTable();
+renderFlowDiagram();
+renderDivergence();
+renderForecastRatio();
+renderRevenueChart();
+renderUtilisationChart();
+renderPricehikeTimeline();
+renderSensitivitySliders();
+renderAch();
+initAfterResolution();
+initSearch();
+initFallbackToggle();
+initTabs();
+lucide.createIcons();
+</script>
+</body>
+</html>
